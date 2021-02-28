@@ -1,26 +1,40 @@
 #define BBP 4
 
-typedef struct test_struct
-{
-    s32 A;
-    s32 B;
-}test_struct;
+#include "math.cpp"
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
 
-test_struct
-TestFunction(s32 A, s32 B)
+void
+ClearBackbuffer(game_backbuffer *Backbuffer)
 {
-    test_struct Result = {0};
+    memset(Backbuffer->Memory,0, Backbuffer->Width * Backbuffer->Height * 4);
+}
+
+v2
+Rotate(f32 Angle, v2 P)
+{
+    v2 Result;
+    
+    f32 CosAngle = cosf(Angle);
+    f32 SinAngle = sinf(Angle);
+    
+    Result.x = P.x * CosAngle - P.y * SinAngle;
+    Result.y = P.x * SinAngle + P.y * CosAngle;
     
     return Result;
+}
+
+v2
+RotateAroundPoint(f32 Angle, v2 P, v2 PToRotateAround)
+{
+    return Rotate(Angle, P - PToRotateAround) + PToRotateAround;
 }
 
 void
 PlotPixel(game_backbuffer *Backbuffer, u32 X, u32 Y, u32 Color)
 {
-    
     u32 *Pixel = (u32*)((u8*)(Backbuffer->Memory) + X * BBP + Y * Backbuffer->Stride); 
     *Pixel = Color;
-    
 }
 
 void
@@ -32,10 +46,21 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer,v2 Vertex0, v2 Vertex1, v2 Verte
     
     
     // NOTE(shvayko): Top left rasterization rule
-    u32 yStart = (u32)(ceil(Vertex0.y-0.5f));
-    u32 yEnd = (u32)(ceil(Vertex1.y-0.5f));
+    s32 yStart = (s32)(ceil(Vertex0.y-0.5f));
+    s32 yEnd = (s32)(ceil(Vertex1.y-0.5f));
     
-    for(u32 YIndex = yStart; 
+    
+    if(yStart < 0)
+    {
+        yStart = 0;
+    }
+    if(yEnd > WINDOW_HEIGHT)
+    {
+        yEnd = WINDOW_HEIGHT;
+    }
+    
+    
+    for(s32 YIndex = yStart; 
         YIndex < yEnd;
         YIndex++)
     {
@@ -43,10 +68,20 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer,v2 Vertex0, v2 Vertex1, v2 Verte
         f32 X0 = (SlopeLeftSide  * (YIndex  + 0.5f - Vertex2.y)) + Vertex2.x;
         f32 X1 = (SlopeRightSide * (YIndex  + 0.5f - Vertex2.y)) + Vertex0.x;
         
-        u32 xStart = (u32)ceil(X0 - 0.5f);
-        u32 xEnd   = (u32)ceil(X1 - 0.5f);
+        s32 xStart = (s32)ceil(X0 - 0.5f);
+        s32 xEnd   = (s32)ceil(X1 - 0.5f);
         
-        for(u32 XIndex = xStart;
+        
+        if(xStart < 0)
+        {
+            xStart = 0;
+        }
+        if(xStart > WINDOW_WIDTH)
+        {
+            xStart = WINDOW_WIDTH;
+        }
+        
+        for(s32 XIndex = xStart;
             XIndex < xEnd;
             XIndex++)
         {
@@ -65,10 +100,20 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v2 Vertex0, v2 Vertex1, v2 Ve
     
     
     // NOTE(shvayko): Top left rasterization rule
-    u32 yStart = (u32)(ceil(Vertex0.y-0.5f));
-    u32 yEnd = (u32)(ceil(Vertex1.y-0.5f));
+    s32 yStart = (s32)(ceil(Vertex0.y-0.5f));
+    s32 yEnd = (s32)(ceil(Vertex1.y-0.5f));
     
-    for(u32 YIndex = yStart; 
+    if(yStart < 0)
+    {
+        yStart = 0;
+    }
+    if(yEnd > WINDOW_HEIGHT)
+    {
+        yEnd = WINDOW_HEIGHT;
+    }
+    
+    
+    for(s32 YIndex = yStart; 
         YIndex < yEnd;
         YIndex++)
     {
@@ -76,10 +121,19 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v2 Vertex0, v2 Vertex1, v2 Ve
         f32 X0 = (SlopeLeftSide  * ((f32)YIndex + 0.5f - Vertex2.y)) + Vertex2.x;
         f32 X1 = (SlopeRightSide * (YIndex + 0.5f - Vertex2.y)) + Vertex1.x;
         
-        u32 xStart = (u32)ceil(X0 - 0.5f);
-        u32 xEnd   = (u32)ceil(X1 - 0.5f);
+        s32 xStart = (s32)ceil(X0 - 0.5f);
+        s32 xEnd   = (s32)ceil(X1 - 0.5f);
         
-        for(u32 XIndex = xStart;
+        if(xStart < 0)
+        {
+            xStart = 0;
+        }
+        if(xStart > WINDOW_WIDTH)
+        {
+            xStart = WINDOW_WIDTH;
+        }
+        
+        for(s32 XIndex = xStart;
             XIndex < xEnd;
             XIndex++)
         {
@@ -161,9 +215,9 @@ DrawTriangle(game_backbuffer *Backbuffer, v2 Vertex0, v2 Vertex1, v2 Vertex2, u3
         }
         else // NOTE(shvayko): Right major
         {
-            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex, Vertex1, 0x00FF00);
+            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex, Vertex1, Color);
             
-            DrawFlatTopTriangle(Backbuffer, Vertex, Vertex2, Vertex1, 0xFF0000);
+            DrawFlatTopTriangle(Backbuffer, Vertex, Vertex2, Vertex1, Color);
         }
     }
 }
@@ -171,46 +225,27 @@ DrawTriangle(game_backbuffer *Backbuffer, v2 Vertex0, v2 Vertex1, v2 Vertex2, u3
 void
 GameUpdateAndRender(game_backbuffer *Backbuffer)
 {
-    // NOTE(shvayko): Clockwise FLAT TOP TRIANGLE TEST FIRST
     
-    v2 Vertex, Vertex1,Vertex2;
+    v2 FrontFaceV0 = v2f(400.0f, 200.0f);
+    v2 FrontFaceV1 = v2f(400.0f, 250.0f);
+    v2 FrontFaceV2 = v2f(550.0f, 250.0f);
     
-    Vertex = v2f(600.0f,100.0f);
-    Vertex2 = v2f(500.0f,100.0f);
-    Vertex1  = v2f(550.0f,300.0f);
+    v2 Vertices[3] = 
+    {
+        FrontFaceV0, FrontFaceV1, FrontFaceV2
+    };
     
-    DrawFlatTopTriangle(Backbuffer,Vertex,Vertex1,Vertex2, 0xFFFF0000);
+    static f32 Angle = 0.001f;
     
+    ClearBackbuffer(Backbuffer);
     
-    v2 Vertex00 = v2f(250.0f,100.0f);
-    v2 Vertex01 = v2f(300.0f,250.0f);
-    v2 Vertex02  = v2f(200.0f,250.0f);
+    for(u32 VerticesIndex = 0;
+        VerticesIndex < 3;
+        VerticesIndex++)
+    {
+        Vertices[VerticesIndex] = RotateAroundPoint(Angle, Vertices[VerticesIndex], v2f(250.0f,250.0f));
+    }
     
-    DrawFlatBottomTriangle(Backbuffer, Vertex00, Vertex01, Vertex02 ,0xFFFF00);
-    
-    v2 Vertex000 = v2f(200.0f,350.0f);
-    v2 Vertex001 = v2f(300.0f,350.0f);
-    v2 Vertex002  = v2f(350.0f,450.0f);
-    
-    DrawTriangle(Backbuffer, Vertex000, Vertex001, Vertex002 ,0x0000FF);
-    
-    // NOTE(shvayko): Right major
-    v2 GeneralTriangleV0 = v2f(600.0f, 450.0f); 
-    v2 GeneralTriangleV1 = v2f(500.0f, 500.0f);
-    v2 GeneralTriangleV2 = v2f(700.0f, 550.0f);
-    
-    DrawTriangle(Backbuffer, GeneralTriangleV0,GeneralTriangleV1,GeneralTriangleV2, 
-                 0x00FFFF);
-    
-    // NOTE(shvayko): Left major
-    v2 GeneralTriangleV00 = v2f(500.0f, 450.0f); 
-    v2 GeneralTriangleV01 = v2f(400.0f, 500.0f);
-    v2 GeneralTriangleV02 = v2f(380.0f, 550.0f);
-    
-    DrawTriangle(Backbuffer, GeneralTriangleV00,GeneralTriangleV01,GeneralTriangleV02, 
-                 0x00FFFF);
-    
-    
-    DrawTriangle(Backbuffer, v2f(50.0f,100.0f),v2f(70.0f,100.0f),v2f(90.0f,50.0f), 
-                 0xFFFFFF);
+    DrawTriangle(Backbuffer, Vertices[0], Vertices[1], Vertices[2], 0x00FF00);
+    Angle += 0.001f;
 }
