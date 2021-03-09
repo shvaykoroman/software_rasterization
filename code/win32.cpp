@@ -70,7 +70,7 @@ BlitToScreen(HDC DeviceContext, backbuffer *Backbuffer, s32 WindowWidth, s32 Win
 }
 
 internal void
-KeyboardMessagesProccessing()  
+KeyboardMessagesProccessing(buttons *Buttons)  
 {
     MSG Message;
     while(PeekMessageA(&Message,0,0,0,PM_REMOVE))
@@ -80,15 +80,16 @@ KeyboardMessagesProccessing()
             case WM_KEYUP:
             case WM_KEYDOWN:
             {
-                bool isDown  =  (Message.lParam & (1 << 31)) == 0;
-                bool wasDown =  (Message.lParam & (1 << 30)) != 0;
-                if(isDown != wasDown)
+                bool IsDown  =  (Message.lParam & (1 << 31)) == 0;
+                bool WasDown =  (Message.lParam & (1 << 30)) != 0;
+                if(IsDown != WasDown)
                 {
                     switch(Message.wParam)
                     {
                         case 'W':
                         {
-                            
+                            Buttons->ButtonUp.IsDown = IsDown;
+                            Buttons->ButtonUp.WasDown = WasDown;
                         }break;
                         case 'A':
                         {
@@ -96,7 +97,8 @@ KeyboardMessagesProccessing()
                         }break;
                         case 'S':
                         {
-                            
+                            Buttons->ButtonDown.IsDown = IsDown;
+                            Buttons->ButtonDown.WasDown = WasDown;
                         }break;
                         case 'D':
                         {
@@ -180,8 +182,27 @@ WinMain(HINSTANCE Instance,
     
     gGameIsRunning = true;
     HDC DeviceContext = GetDC(WindowHandle);
+    
+    
+    controller  Keyboard[2] = {};
+    controller *OldInput = &Keyboard[0];
+    controller *NewInput = &Keyboard[1];
+    
     while(gGameIsRunning)
     {
+        
+        buttons *OldControllerInput = &OldInput->Controller[0];
+        buttons *NewControllerInput = &NewInput->Controller[0];
+        buttons  clearControllerInput = {};
+        *NewControllerInput = clearControllerInput;
+        
+        for(u32 ButtonIndex = 0;
+            ButtonIndex < CountOf(NewControllerInput->Buttons);
+            ButtonIndex++)
+        {
+            NewControllerInput->Buttons[ButtonIndex].IsDown = OldControllerInput->Buttons[ButtonIndex].IsDown;
+        }
+        
         game_backbuffer GameBackbuffer = {};
         
         GameBackbuffer.Width  = gBackbuffer.Width;
@@ -189,10 +210,14 @@ WinMain(HINSTANCE Instance,
         GameBackbuffer.Stride = gBackbuffer.Stride;
         GameBackbuffer.Memory = gBackbuffer.Memory;
         
-        KeyboardMessagesProccessing();
-        GameUpdateAndRender(&GameBackbuffer);
+        KeyboardMessagesProccessing(NewControllerInput);
+        GameUpdateAndRender(&GameBackbuffer, Keyboard);
         window_dim Dim = GetWindowDim(WindowHandle);
         BlitToScreen(DeviceContext, &gBackbuffer, Dim.Width, Dim.Height);
+        
+        controller *Temp = NewInput;
+        NewInput = OldInput;
+        OldInput = Temp;
     }
     return 0;
 }

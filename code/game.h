@@ -22,6 +22,8 @@ typedef double f64;
 
 #define assert(D) if(!(D)) {*(u32*)0 = 0;}
 
+#define CountOf(X) (sizeof(X) / sizeof(X[0]))
+
 typedef struct v2
 {
     union
@@ -94,6 +96,34 @@ struct window_dim
     s32 Height;
 };
 
+struct button_state
+{
+    bool IsDown;
+    bool WasDown;
+};
 
+struct buttons
+{
+    union
+    {
+        button_state Buttons[2];
+        
+        struct
+        {
+            button_state ButtonUp;
+            button_state ButtonDown;
+        };
+    };
+};
+
+struct controller
+{
+    buttons Controller[2];
+};
+
+struct triangle
+{
+    v3 Vertex[3];
+};
 
 #endif //GAME_H

@@ -52,3 +52,29 @@ operator-(v2 A, v2 B)
     
     return Result;
 }
+
+
+inline v3
+operator+(v3 A, v3 B)
+{
+    v3 Result;
+    
+    Result.x = A.x + B.x;
+    Result.y = A.y + B.y;
+    Result.z = A.z + B.z;
+    
+    return Result;
+}
+
+inline v3
+operator-(v3 A, v3 B)
+{
+    v3 Result;
+    
+    Result.x = A.x - B.x;
+    Result.y = A.y - B.y;
+    Result.z = A.z + B.z;
+    
+    return Result;
+}
+
