@@ -69,6 +69,9 @@ BlitToScreen(HDC DeviceContext, backbuffer *Backbuffer, s32 WindowWidth, s32 Win
                   SRCCOPY);
 }
 
+#define IS_DOWN(Name,IsDown)  (Buttons->Name.IsDown = IsDown)
+#define WAS_DOWN(Name,WasDown) (Buttons->Name.WasDown = WasDown)
+
 internal void
 KeyboardMessagesProccessing(buttons *Buttons)  
 {
@@ -88,21 +91,23 @@ KeyboardMessagesProccessing(buttons *Buttons)
                     {
                         case 'W':
                         {
-                            Buttons->ButtonUp.IsDown = IsDown;
-                            Buttons->ButtonUp.WasDown = WasDown;
+                            IS_DOWN(ButtonUp,IsDown);
+                            WAS_DOWN(ButtonUp,WasDown);
                         }break;
                         case 'A':
                         {
-                            
+                            IS_DOWN(ButtonLeft,IsDown);
+                            WAS_DOWN(ButtonLeft,WasDown);
                         }break;
                         case 'S':
                         {
-                            Buttons->ButtonDown.IsDown = IsDown;
-                            Buttons->ButtonDown.WasDown = WasDown;
+                            IS_DOWN(ButtonDown,IsDown);
+                            WAS_DOWN(ButtonDown,WasDown);
                         }break;
                         case 'D':
                         {
-                            
+                            IS_DOWN(ButtonRight,IsDown);
+                            WAS_DOWN(ButtonRight,WasDown);
                         }break;
                         default:
                         {

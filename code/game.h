@@ -50,6 +50,42 @@ typedef struct v3f
 }v3;
 
 
+
+typedef struct v4f
+{
+    union
+    {
+        f32 e[4];
+        struct
+        {
+            f32 x,y,z,w;
+        };
+        struct
+        {
+            v3 xyz;
+            f32 Ignored;
+        };
+        struct
+        {
+            f32 Ignored;
+            v3 yzw;
+        };
+    };
+}v4;
+
+
+#define v4f(x,y,z,w) v4f_create(x,y,z,w)
+
+inline v4
+v4f_create(f32 x,f32 y, f32 z, f32 w)
+{
+    v4 Result = {};
+    Result = {x,y,z,w};
+    return Result;
+}
+
+
+
 #define v3f(x,y,z) v3f_create(x,y,z)
 
 inline v3
@@ -106,12 +142,14 @@ struct buttons
 {
     union
     {
-        button_state Buttons[2];
+        button_state Buttons[4];
         
         struct
         {
             button_state ButtonUp;
             button_state ButtonDown;
+            button_state ButtonLeft;
+            button_state ButtonRight;
         };
     };
 };
@@ -119,11 +157,6 @@ struct buttons
 struct controller
 {
     buttons Controller[2];
-};
-
-struct triangle
-{
-    v3 Vertex[3];
 };
 
 #endif //GAME_H
