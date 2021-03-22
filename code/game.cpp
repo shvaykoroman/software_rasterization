@@ -193,6 +193,17 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Verte
             xStart = WINDOW_WIDTH;
         }
         
+        if(xEnd < 0)
+        {
+            xEnd = 0;
+        }
+        if(xEnd > WINDOW_WIDTH)
+        {
+            xEnd = WINDOW_WIDTH;
+        }
+        
+        
+        
         for(s32 XIndex = xStart;
             XIndex < xEnd;
             XIndex++)
@@ -242,6 +253,15 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Ve
         if(xStart > WINDOW_WIDTH)
         {
             xStart = WINDOW_WIDTH;
+        }
+        
+        if(xEnd < 0)
+        {
+            xEnd = 0;
+        }
+        if(xEnd > WINDOW_WIDTH)
+        {
+            xEnd = WINDOW_WIDTH;
         }
         
         for(s32 XIndex = xStart;
@@ -500,94 +520,54 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
         
         // NOTE(shvayko):Near clipping test
         // We will not test far plane
-        if(!DiscardTriangle)
-        {
-            if(ClipV0.z < 0.0f)
-            {
-                
-                if(V1.z < 0.0f)
-                {
-                    //ClipTriangleIfTwoVertexOutside(ClipV0,ClipV1,ClipV2);
-                }
-                else if(V2.z < 0.0f)
-                {
-                    //ClipTriangleIfTwoVertexOutside(ClipV0,ClipV2,ClipV1);
-                }
-                else
-                {
-                    //ClipTriangleIfOneVertexOutside(ClipV0,ClipV1,ClipV2);
-                }
-            }
-            else if(ClipV1.z < 0.0f)
-            {
-                if(ClipV0.z < 0.0f)
-                {
-                    //ClipTriangleIfTwoVertexOutside(ClipV1,ClipV0,ClipV2);
-                }
-                else if(ClipV2.z < 0.0f)
-                {
-                    //ClipTriangleIfTwoVertexOutside(ClipV1,ClipV2,ClipV0);
-                }
-                else
-                {
-                    //ClipTriangleIfOneVertexOutside(ClipV1,ClipV0,ClipV2);
-                }
-            }
-            else if(ClipV2.z < 0.0f)
-            {
-                //ClipTriangleIfOneVertexOutside(ClipV2,ClipV0,ClipV1);
-            }
-            else
-            {
-                // NOTE(shvayko): All vertices on the right side
-                // NOTE(shvayko): Pespective divide. 
-                v3 NdcV0;
-                v3 NdcV1;
-                v3 NdcV2;
-                NdcV0.x = ClipV0.x / ClipV0.w;
-                NdcV0.y = ClipV0.y / ClipV0.w;
-                NdcV0.z = ClipV0.z / ClipV0.w;
-                
-                NdcV1.x = ClipV1.x / ClipV1.w;
-                NdcV1.y = ClipV1.y / ClipV1.w;
-                NdcV1.z = ClipV1.z / ClipV1.w;
-                
-                NdcV2.x = ClipV2.x / ClipV2.w;
-                NdcV2.y = ClipV2.y / ClipV2.w;
-                NdcV2.z = ClipV2.z / ClipV2.w;
-#if 1
-                assert((-1.0f <= NdcV0.x) && (NdcV0.x <= 1.0f));
-                assert((-1.0f <= NdcV0.y) && (NdcV0.y  <= 1.0f));
-                assert((-1.0f <= NdcV0.z) && (NdcV0.z  <= 1.0f));
-                
-                assert((-1.0f <= NdcV1.x) && (NdcV1.x <= 1.0f));
-                assert((-1.0f <= NdcV1.y) && (NdcV1.y  <= 1.0f));
-                assert((-1.0f <= NdcV1.z) && (NdcV1.z  <= 1.0f));
-                
-                assert((-1.0f <= NdcV2.x) && (NdcV2.x <= 1.0f));
-                assert((-1.0f <= NdcV2.y) && (NdcV2.y  <= 1.0f));
-                assert((-1.0f <= NdcV2.z) && (NdcV2.z  <= 1.0f));
+        
+        // NOTE(shvayko): All vertices on the right side
+        // NOTE(shvayko): Pespective divide. 
+        v3 NdcV0;
+        v3 NdcV1;
+        v3 NdcV2;
+        NdcV0.x = ClipV0.x / ClipV0.w;
+        NdcV0.y = ClipV0.y / ClipV0.w;
+        NdcV0.z = ClipV0.z / ClipV0.w;
+        
+        NdcV1.x = ClipV1.x / ClipV1.w;
+        NdcV1.y = ClipV1.y / ClipV1.w;
+        NdcV1.z = ClipV1.z / ClipV1.w;
+        
+        NdcV2.x = ClipV2.x / ClipV2.w;
+        NdcV2.y = ClipV2.y / ClipV2.w;
+        NdcV2.z = ClipV2.z / ClipV2.w;
+#if 0
+        assert((-1.0f <= NdcV0.x) && (NdcV0.x <= 1.0f));
+        assert((-1.0f <= NdcV0.y) && (NdcV0.y  <= 1.0f));
+        assert((-1.0f <= NdcV0.z) && (NdcV0.z  <= 1.0f));
+        
+        assert((-1.0f <= NdcV1.x) && (NdcV1.x <= 1.0f));
+        assert((-1.0f <= NdcV1.y) && (NdcV1.y  <= 1.0f));
+        assert((-1.0f <= NdcV1.z) && (NdcV1.z  <= 1.0f));
+        
+        assert((-1.0f <= NdcV2.x) && (NdcV2.x <= 1.0f));
+        assert((-1.0f <= NdcV2.y) && (NdcV2.y  <= 1.0f));
+        assert((-1.0f <= NdcV2.z) && (NdcV2.z  <= 1.0f));
 #endif
-                
-                // NOTE(shvayko):Transforming from NDC space to windows coordinates
-                v3 WinPV0;
-                v3 WinPV1;
-                v3 WinPV2;
-                WinPV0.x = (NdcV0.x + 1.0f)*WINDOW_WIDTH*0.5f;
-                WinPV0.y = (NdcV0.y + 1.0f)*WINDOW_HEIGHT*0.5f;
-                WinPV0.z = ClipV0.z;
-                
-                WinPV1.x = (NdcV1.x + 1.0f)*WINDOW_WIDTH*0.5f;
-                WinPV1.y = (NdcV1.y + 1.0f)*WINDOW_HEIGHT*0.5f;
-                WinPV1.z = ClipV1.z;
-                
-                WinPV2.x = (NdcV2.x + 1.0f)*WINDOW_WIDTH*0.5f;
-                WinPV2.y = (NdcV2.y + 1.0f)*WINDOW_HEIGHT*0.5f;
-                WinPV2.z = ClipV2.z;
-                
-                // NOTE(shvayko): Rasterization Stage
-                DrawTriangle(Backbuffer,WinPV0,WinPV1,WinPV2, Triangle->Color);
-            }
-        }
+        
+        // NOTE(shvayko):Transforming from NDC space to windows coordinates
+        v3 WinPV0;
+        v3 WinPV1;
+        v3 WinPV2;
+        WinPV0.x = (NdcV0.x + 1.0f)*WINDOW_WIDTH*0.5f;
+        WinPV0.y = (NdcV0.y + 1.0f)*WINDOW_HEIGHT*0.5f;
+        WinPV0.z = ClipV0.z;
+        
+        WinPV1.x = (NdcV1.x + 1.0f)*WINDOW_WIDTH*0.5f;
+        WinPV1.y = (NdcV1.y + 1.0f)*WINDOW_HEIGHT*0.5f;
+        WinPV1.z = ClipV1.z;
+        
+        WinPV2.x = (NdcV2.x + 1.0f)*WINDOW_WIDTH*0.5f;
+        WinPV2.y = (NdcV2.y + 1.0f)*WINDOW_HEIGHT*0.5f;
+        WinPV2.z = ClipV2.z;
+        
+        // NOTE(shvayko): Rasterization Stage
+        DrawTriangle(Backbuffer,WinPV0,WinPV1,WinPV2, Triangle->Color);
     }
 }
