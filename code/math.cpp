@@ -7,9 +7,6 @@
 
 #define PI 3.14159f
 
-extern f32 gCosTable[361];
-extern f32 gSinTable[361];
-
 struct m4x4
 {
     union
@@ -18,18 +15,6 @@ struct m4x4
     };
 };
 
-
-v3f 
-addv3f(v3f A, v3f B)
-{
-    v3f Result = v3f(0.0f,0.0f,0.0f);
-    
-    Result.x = A.x + B.x;
-    Result.y = A.y + B.y;
-    Result.z = A.z + B.z;
-    
-    return Result;
-}
 
 inline v2
 operator+(v2 A, v2 B)
