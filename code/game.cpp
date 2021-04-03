@@ -579,9 +579,10 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     }
     
 #if 1
-    //gTriangles[0].Vertex[2].x += dX;
-    //gTriangles[0].Vertex[2].z += dZ;
-    
+#if 0
+    gTriangles[0].Vertex[2].x += dX;
+    gTriangles[0].Vertex[2].z += dZ;
+#else
     MoveTriangle(0,dX,0,dZ);
     MoveTriangle(1,dX,0,dZ);
     MoveTriangle(2,dX,0,dZ);
@@ -591,7 +592,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     MoveTriangle(6,dX,0,dZ);
     MoveTriangle(7,dX,0,dZ);
     MoveTriangle(8,dX,0,dZ);
-    
+#endif
 #if 0
     static f32 Angle = 0.001f;
     Angle += 0.001f;
@@ -733,7 +734,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 // NOTE(shvayko): 1.0f is near plane Z
                 
                 // NOTE(shvayko): TmpV0 and TmpV2
-                f32 t = TmpV1.z / (TmpV0.z - TmpV1.z); 
+                f32 t = (1.0f-TmpV1.z) / (TmpV0.z - TmpV1.z); 
                 
                 f32 x = TmpV1.x + (TmpV0.x - TmpV1.x)*t;
                 f32 y = TmpV1.y + (TmpV0.y - TmpV1.y)*t;
@@ -742,7 +743,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 TmpV1 = v3f(x,y,1.1f);
                 // NOTE(shvayko): TmpV0 and TmpV2
                 
-                f32 t1 = TmpV2.z / (TmpV0.z - TmpV2.z); 
+                f32 t1 = (1.0f - TmpV2.z) / (TmpV0.z - TmpV2.z); 
                 
                 x = TmpV2.x + (TmpV0.x - TmpV2.x)*t1;
                 y = TmpV2.y + (TmpV0.y - TmpV2.y)*t1;
@@ -794,7 +795,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 // NOTE(shvayko): first created new vertex
                 
                 // NOTE(shvayko): 1.0f is near plane Z
-                f32 t = TmpV2.z / (TmpV0.z - TmpV2.z); 
+                f32 t = (1.0f-TmpV2.z) / (TmpV0.z - TmpV2.z); 
                 
                 f32 X0i = TmpV2.x + (TmpV0.x - TmpV2.x)*t;
                 f32 Y0i = TmpV2.y + (TmpV0.y - TmpV2.y)*t;
@@ -802,7 +803,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 
                 // NOTE(shvayko): second created new vertex
                 
-                f32 t1 = TmpV2.z / (TmpV1.z - TmpV2.z);
+                f32 t1 = (1.0f-TmpV2.z) / (TmpV1.z - TmpV2.z);
                 
                 f32 X1i = TmpV2.x + (TmpV1.x - TmpV2.x)*t1;
                 f32 Y1i = TmpV2.y + (TmpV1.y - TmpV2.y)*t1;
