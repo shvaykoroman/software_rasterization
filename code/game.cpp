@@ -1,10 +1,11 @@
+#define IsButtonDown(Button) (Input->Controller[0].Button.IsDown)
 #define BBP 4
 #include "math.cpp"
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
 #define Radians(X) (X * PI / 180.0f)
-#define CENTER_OF_PROJECTION 0.5f*v3f((f32)WINDOW_WIDTH,(f32)WINDOW_HEIGHT,0.0f)
+#define SCREEN_CENTER 0.5f*v3f((f32)WINDOW_WIDTH,(f32)WINDOW_HEIGHT,0.0f)
 #define MAX_TRIANGLES 9064
 
 #define CLIPCODE_X_GREATER (1 << 0) 
@@ -24,6 +25,21 @@ enum
     Clipping_CheckX = 0,
     Clipping_CheckY,
     Clipping_CheckZ,
+};
+
+enum
+{
+    ClipCode_XGreater = (1 << 0),
+    ClipCode_XLower   = (1 << 1),
+    ClipCode_XInside  = (1 << 2),
+    
+    ClipCode_YGreater = (1 << 3),
+    ClipCode_YLower   = (1 << 4),
+    ClipCode_YInside  = (1 << 5),
+    
+    ClipCode_ZGreater = (1 << 6),
+    ClipCode_ZLower   = (1 << 7),
+    ClipCode_ZInside  = (1 << 8),
 };
 
 struct triangle
@@ -271,8 +287,10 @@ RotateYAroundPoint(f32 Angle, v3 P, v3 PToRotateAround)
 void
 PlotPixel(game_backbuffer *Backbuffer, u32 X, u32 Y, u32 Color)
 {
+    
     u32 *Pixel = (u32*)((u8*)(Backbuffer->Memory) + X * BBP + Y * Backbuffer->Stride); 
     *Pixel = Color;
+    
 }
 
 void
@@ -488,8 +506,9 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
         gIsInit = true;
     }
     
-    gTrianglesCount = 0;
+    gTrianglesCount = 0; // NOTE(shvayko): Reset
 #if 1
+    // NOTE(shvayko): Test Cube 
     v3 FrontFaceV0 = v3f(-10.0f, 10.0f, 20.0f);
     v3 FrontFaceV1 = v3f( 10.0f, 10.0f, 20.0f);
     v3 FrontFaceV2 = v3f(-10.0f, -10.0f,20.0f);
@@ -532,51 +551,51 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     v3 LeftFaceV02 = v3f(-10.0f, 10.0f, 25.0f);
     AddTriangle(LeftFaceV00,LeftFaceV01,LeftFaceV02,0x00FFFF);
 #else
-    v3 LeftFaceV00 = v3f(5.0f, -10.0f, 20.0f);
+    // NOTE(shvayko): Test triangle where 2 vertices beyond near clipping plane
+    v3 LeftFaceV00 = v3f(5.0f, -10.0f,  20.0f);
     v3 LeftFaceV01 = v3f(10.0f, -10.0f, 20.0f);
-    v3 LeftFaceV02 = v3f(5.0f, 10.0f,  -1.0f);
+    v3 LeftFaceV02 = v3f(7.0f, 10.0f,   3.0f);
     AddTriangle(LeftFaceV00,LeftFaceV01,LeftFaceV02,0x00FFFF);
 #endif
     ClearBackbuffer(Backbuffer);
     
-    persist f32 ZOffset = 1.0f;
-    persist f32 XOffset = 1.0f;
-    if(Input->Controller[0].ButtonUp.IsDown)
+    persist f32 dZ = 1.0f;
+    persist f32 dX = 1.0f;
+    if(IsButtonDown(ButtonUp))
     {
-        ZOffset += 0.01f;
+        dZ += 0.01f;
     }
-    if(Input->Controller[0].ButtonDown.IsDown)
+    if(IsButtonDown(ButtonDown))
     {
-        ZOffset -= 0.01f;
+        dZ -= 0.01f;
     }
-    if(Input->Controller[0].ButtonLeft.IsDown)
+    if(IsButtonDown(ButtonLeft))
     {
-        XOffset -= 0.01f;
+        dX -= 0.01f;
     }
-    if(Input->Controller[0].ButtonRight.IsDown)
+    if(IsButtonDown(ButtonRight))
     {
-        XOffset += 0.01f;
+        dX += 0.01f;
     }
     
+#if 1
+    //gTriangles[0].Vertex[2].x += dX;
+    //gTriangles[0].Vertex[2].z += dZ;
+    
+    MoveTriangle(0,dX,0,dZ);
+    MoveTriangle(1,dX,0,dZ);
+    MoveTriangle(2,dX,0,dZ);
+    MoveTriangle(3,dX,0,dZ);
+    MoveTriangle(4,dX,0,dZ);
+    MoveTriangle(5,dX,0,dZ);
+    MoveTriangle(6,dX,0,dZ);
+    MoveTriangle(7,dX,0,dZ);
+    MoveTriangle(8,dX,0,dZ);
+    
+#if 0
     static f32 Angle = 0.001f;
     Angle += 0.001f;
-#if 1
-    
-    //gTriangles[0].Vertex[1].z = gTriangles[0].Vertex[1].z + ZOffset;
-    //gTriangles[0].Vertex[2].z = gTriangles[0].Vertex[2].z + ZOffset;
-    
-    MoveTriangle(0,XOffset,0,ZOffset);
-    MoveTriangle(1,XOffset,0,ZOffset);
-    MoveTriangle(2,XOffset,0,ZOffset);
-    MoveTriangle(3,XOffset,0,ZOffset);
-    MoveTriangle(4,XOffset,0,ZOffset);
-    MoveTriangle(5,XOffset,0,ZOffset);
-    MoveTriangle(6,XOffset,0,ZOffset);
-    MoveTriangle(7,XOffset,0,ZOffset);
-    MoveTriangle(8,XOffset,0,ZOffset);
-    
-    
-    
+    // NOTE(shvayko): Testing rotations
     for(u32 Index = 0;
         Index < 8;
         Index++)
@@ -588,8 +607,10 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
             gTriangles[Index].Vertex[VertexIndex] = RotateZAroundPoint(Angle, gTriangles[Index].Vertex[VertexIndex], v3f(1,1,0));
         }
     }
+#endif
     
 #endif
+    
     f32 FOV = 90.0f; // NOTE(shvayko): 
     f32 n = 1.0f; // NOTE: Near plane
     f32 f = 15.0f; // NOTE: Far plane
@@ -617,17 +638,16 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
         u32 VerticesInsideZRange = 0;
         v4 TestVertices[3] = {ClipV0,ClipV1,ClipV2};
         
-        // NOTE(shvayko): Check X coordinates
         for(u32 VertexIndex = 0;
             VertexIndex < 3;
             VertexIndex++)
         {
             v4 CurrentTestVertex = TestVertices[VertexIndex];
-            if(CurrentTestVertex.x > CurrentTestVertex.w)
+            if(CurrentTestVertex.x >= CurrentTestVertex.w)
             {
                 ClipCode[VertexIndex] |= CLIPCODE_X_GREATER;
             }
-            else if(CurrentTestVertex.x < -CurrentTestVertex.w)
+            else if(CurrentTestVertex.x <= -CurrentTestVertex.w)
             {
                 ClipCode[VertexIndex] |= CLIPCODE_X_LOWER;
             }
@@ -636,11 +656,11 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 ClipCode[VertexIndex] |= CLIPCODE_X_INSIDE;
             }
             
-            if(CurrentTestVertex.y > CurrentTestVertex.w)
+            if(CurrentTestVertex.y >= CurrentTestVertex.w)
             {
                 ClipCode[VertexIndex] |= CLIPCODE_Y_GREATER;
             }
-            else if(CurrentTestVertex.y < -CurrentTestVertex.w)
+            else if(CurrentTestVertex.y <= -CurrentTestVertex.w)
             {
                 ClipCode[VertexIndex] |= CLIPCODE_Y_LOWER;
             }
@@ -649,11 +669,11 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 ClipCode[VertexIndex] |= CLIPCODE_Y_INSIDE;
             }
             
-            if(CurrentTestVertex.z > CurrentTestVertex.w)
+            if(CurrentTestVertex.z >= CurrentTestVertex.w)
             {
                 ClipCode[VertexIndex] |= CLIPCODE_Z_GREATER;
             }
-            else if(CurrentTestVertex.z < -CurrentTestVertex.w)
+            else if(CurrentTestVertex.z <= -CurrentTestVertex.w)
             {
                 ClipCode[VertexIndex] |= CLIPCODE_Z_LOWER;
             }
@@ -675,7 +695,6 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
         
         
         // NOTE(shvayko):Check if any vertex lying beyond near plane
-        
         if(IsBitSet(ClipCode[0],7) ||
            IsBitSet(ClipCode[1],7) ||
            IsBitSet(ClipCode[2],7))
@@ -688,51 +707,56 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 
                 // NOTE(shvayko): TmpV0 - Interior vertex; TmpV1 - Exterior vertex; 
                 // TmpV2 - Exterior vertex
-                v4 TmpV0,TmpV1,TmpV2;
-                if(ClipCode[0] & CLIPCODE_Z_INSIDE)
+                v3 TmpV0,TmpV1,TmpV2;
+                if(IsBitSet(ClipCode[0],8))
                 {
-                    TmpV0 = ClipV0;
-                    TmpV1 = ClipV1;
-                    TmpV2 = ClipV2;
+                    TmpV0 = V0;
+                    TmpV1 = V1;
+                    TmpV2 = V2;
                 }
-                else if(ClipCode[1] & CLIPCODE_Z_INSIDE)
+                else if(IsBitSet(ClipCode[1],8))
                 {
-                    TmpV0 = ClipV1;
-                    TmpV1 = ClipV0;
-                    TmpV2 = ClipV2;
+                    TmpV0 = V1;
+                    TmpV1 = V0;
+                    TmpV2 = V2;
                 }
                 else
                 {
-                    TmpV0 = ClipV2;
-                    TmpV1 = ClipV0;
-                    TmpV2 = ClipV1;
+                    TmpV0 = V2;
+                    TmpV1 = V0;
+                    TmpV2 = V1;
                 }
                 
-                // NOTE(shvayko): solving line equations
+                // NOTE(shvayko): Solve for t when z component is equal to near z
                 // Pi(x,y,z) = P0(x,y,z) + (P1(x,y,z) - P0(x,y,z))*t
-                // NOTE(shvayko): TmpV0 and TmpV1
-                // 1.0f is Near plane
-                f32 t = -TmpV1.z / (TmpV0.z - TmpV1.z); 
+                
+                // NOTE(shvayko): 1.0f is near plane Z
+                
+                // NOTE(shvayko): TmpV0 and TmpV2
+                f32 t = TmpV1.z / (TmpV0.z - TmpV1.z); 
                 
                 f32 x = TmpV1.x + (TmpV0.x - TmpV1.x)*t;
                 f32 y = TmpV1.y + (TmpV0.y - TmpV1.y)*t;
-                f32 z = TmpV1.w + (TmpV0.w - TmpV1.w)*t;
-                TmpV1 = v4f(x,y,z,z);
+                f32 z = TmpV1.z + (TmpV0.z - TmpV1.z)*t;
+                
+                TmpV1 = v3f(x,y,1.1f);
                 // NOTE(shvayko): TmpV0 and TmpV2
-                // 1.0f is Near plane
-                f32 t1 = -TmpV2.z / (TmpV0.z - TmpV2.z); 
+                
+                f32 t1 = TmpV2.z / (TmpV0.z - TmpV2.z); 
                 
                 x = TmpV2.x + (TmpV0.x - TmpV2.x)*t1;
                 y = TmpV2.y + (TmpV0.y - TmpV2.y)*t1;
-                z = TmpV2.w + (TmpV0.w - TmpV2.w)*t1;
-                TmpV2 = v4f(x,y,z,z);
+                z = TmpV2.z + (TmpV0.z - TmpV2.z)*t1;
+                
+                TmpV2 = v3f(x,y,1.1f);
                 
                 // NOTE(shvayko): New triangle
-                ClipV0 = TmpV0;
-                ClipV1 = TmpV1;
-                ClipV2 = TmpV2;
+                v3 NT0 = TmpV0;
+                v3 NT1 = TmpV1;
+                v3 NT2 = TmpV2;
                 
-                int foo = 5;
+                AddTriangle(NT0,NT1,NT2,Triangle->Color);
+                
             }
             else if(VerticesInsideZRange == 2)
             {
@@ -743,35 +767,34 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 // NOTE(shvayko): TmpV0 - Interior vertex; TmpV1 - Interior vertex; 
                 // TmpV2 - Exterior vertex
                 
-                v4 TmpV0,TmpV1,TmpV2;
-                if(ClipCode[0] & CLIPCODE_Z_INSIDE)
+                v3 TmpV0,TmpV1,TmpV2;
+                if(IsBitSet(ClipCode[0],8))
                 {
-                    TmpV0 = ClipV0;
-                    if(ClipCode[1] & CLIPCODE_Z_INSIDE)
+                    TmpV0 = V0;
+                    if(IsBitSet(ClipCode[1],8))
                     {
-                        TmpV1 = ClipV1;
-                        TmpV2 = ClipV2;
+                        TmpV1 = V1;
+                        TmpV2 = V2;
                     }
                     else
                     {
-                        TmpV1 = ClipV2;
-                        TmpV2 = ClipV1;
+                        TmpV1 = V2;
+                        TmpV2 = V1;
                     }
                 } 
-                else if(ClipCode[1] & CLIPCODE_Z_INSIDE)
+                else if(IsBitSet(ClipCode[1],8))
                 {
-                    TmpV0 = ClipV1;
-                    TmpV1 = ClipV2;
-                    TmpV2 = ClipV0;
-                }
-                else
-                {
-                    assert(!"May be I need one more if statement for clipcode[2]");
+                    TmpV0 = V1;
+                    TmpV1 = V2;
+                    TmpV2 = V0;
                 }
                 
                 // NOTE(shvayko): Solve for t when z component is equal to near z
+                
                 // NOTE(shvayko): first created new vertex
-                f32 t = -TmpV2.z / (TmpV0.z - TmpV2.z); 
+                
+                // NOTE(shvayko): 1.0f is near plane Z
+                f32 t = TmpV2.z / (TmpV0.z - TmpV2.z); 
                 
                 f32 X0i = TmpV2.x + (TmpV0.x - TmpV2.x)*t;
                 f32 Y0i = TmpV2.y + (TmpV0.y - TmpV2.y)*t;
@@ -779,17 +802,16 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 
                 // NOTE(shvayko): second created new vertex
                 
-                f32 t1 = -TmpV2.z / (TmpV1.z - TmpV2.z);
+                f32 t1 = TmpV2.z / (TmpV1.z - TmpV2.z);
                 
                 f32 X1i = TmpV2.x + (TmpV1.x - TmpV2.x)*t1;
                 f32 Y1i = TmpV2.y + (TmpV1.y - TmpV2.y)*t1;
                 f32 Z1i = TmpV2.z + (TmpV1.z - TmpV2.z)*t1;
                 
-                // NOTE(shvayko): Split in 2 triangles
+                // NOTE(shvayko): Split into 2 triangles
                 
-                AddTriangle(TmpV0.xyz,v3f(X0i,Y0i,Z0i),TmpV1.xyz,0xFF0000);
-                AddTriangle(TmpV0.xyz,TmpV1.xyz,v3f(X1i,Y1i,Z1i),0xFF0000);
-                
+                AddTriangle(TmpV0,v3f(X1i,Y1i,1.1f),TmpV1,Triangle->Color);
+                AddTriangle(TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f),Triangle->Color);
             }
             else
             {
