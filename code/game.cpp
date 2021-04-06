@@ -27,25 +27,12 @@ enum
     Clipping_CheckZ,
 };
 
-enum
-{
-    ClipCode_XGreater = (1 << 0),
-    ClipCode_XLower   = (1 << 1),
-    ClipCode_XInside  = (1 << 2),
-    
-    ClipCode_YGreater = (1 << 3),
-    ClipCode_YLower   = (1 << 4),
-    ClipCode_YInside  = (1 << 5),
-    
-    ClipCode_ZGreater = (1 << 6),
-    ClipCode_ZLower   = (1 << 7),
-    ClipCode_ZInside  = (1 << 8),
-};
-
 struct triangle
 {
     v3 Vertex[3];
-    u32 Color;
+    v3 V0Color;
+    v3 V1Color;
+    v3 V2Color;
 };
 
 global u32 gTrianglesCount;
@@ -187,15 +174,17 @@ MoveTriangle(u32 TriangleIndex, f32 X,f32 Y,f32 Z)
 
 
 internal void
-AddTriangle(v3 V0, v3 V1, v3 V2, u32 Color)
+AddTriangle(v3 V0, v3 V1, v3 V2, v3 V0Color,v3 V1Color,v3 V2Color)
 {
-    //assert(gTrianglesCount < MAX_TRIANGLES);
+    assert(gTrianglesCount < MAX_TRIANGLES);
     triangle *Triangle = &gTriangles[gTrianglesCount++];
     
     Triangle->Vertex[0] = V0;
     Triangle->Vertex[1] = V1;
     Triangle->Vertex[2] = V2;
-    Triangle->Color = Color;
+    Triangle->V0Color = V0Color;
+    Triangle->V1Color = V1Color;
+    Triangle->V2Color = V2Color;
 }
 
 f32
@@ -293,8 +282,57 @@ PlotPixel(game_backbuffer *Backbuffer, u32 X, u32 Y, u32 Color)
     
 }
 
+struct barycentric_results
+{
+    f32 W0;
+    f32 W1;
+    f32 W2;
+};
+
+internal barycentric_results
+Barycentric(s32 X,s32 Y, v3 V0,v3 V1,v3 V2)
+{
+    barycentric_results Result = {0};
+    
+    f32 y2y3 = V1.y - V2.y;
+    f32 x3x2 = V2.x - V1.x;
+    f32 x1x3 = V0.x - V2.x;
+    f32 y1y3 = V0.y - V2.y;
+    f32 y3y1 = V2.y - V0.y;
+    f32 xx3  = X - V2.x;
+    f32 yy3  = Y - V2.y;
+    
+    f32 Denominator = (y2y3*x1x3)+(x3x2*y1y3);
+    Result.W0 = (y2y3*xx3+x3x2*yy3) / Denominator;
+    Result.W1 = (y3y1*xx3+x1x3*yy3) / Denominator;
+    Result.W2 = (1.0f - Result.W0 - Result.W1);
+    
+    return Result;
+}
+
+internal u32
+GetColorForPixel(barycentric_results BColor,v3 V0Color,v3 V1Color,v3 V2Color)
+{
+    u32 Result = 0;
+    u32 ColorV0 = ((u32)(V0Color.r*BColor.W0) << 16) |
+        ((u32)(V0Color.g*BColor.W1) << 8) | 
+        ((u32)(V0Color.b*BColor.W2) << 0);
+    
+    u32 ColorV1 = ((u32)(V1Color.r*BColor.W0) << 16) |
+        ((u32)(V1Color.g*BColor.W1) << 8) | 
+        ((u32)(V1Color.b*BColor.W2) << 0);
+    
+    u32 ColorV2 = ((u32)(V2Color.r*BColor.W0) << 16) |
+        ((u32)(V2Color.g*BColor.W1) << 8) | 
+        ((u32)(V2Color.b*BColor.W2) << 0);
+    
+    
+    Result = ColorV0+ColorV1+ColorV2;
+    return Result;
+}
+
 void
-DrawFlatTopTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Vertex2, u32 Color)
+DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, v3 V0Color,v3 V1Color, v3 V2Color)
 {
     // NOTE(shvayko): change in x per y
     f32 SlopeLeftSide = (Vertex1.x - Vertex2.x) / (Vertex1.y - Vertex2.y);
@@ -343,12 +381,12 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Verte
             xEnd = WINDOW_WIDTH;
         }
         
-        
-        
         for(s32 XIndex = xStart;
             XIndex < xEnd;
             XIndex++)
         {
+            barycentric_results BColor = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
+            u32 Color = GetColorForPixel(BColor,V0Color,V1Color,V2Color);
             PlotPixel(Backbuffer, XIndex, YIndex, Color);
         }
     }
@@ -356,7 +394,7 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Verte
 }
 
 void
-DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Vertex2, u32 Color)
+DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Vertex2, v3 V0Color,v3 V1Color, v3 V2Color)
 {
     // NOTE(shvayko): change in x per y
     f32 SlopeLeftSide = (Vertex2.x  - Vertex0.x) / (Vertex1.y - Vertex0.y);
@@ -409,6 +447,9 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Ve
             XIndex < xEnd;
             XIndex++)
         {
+            barycentric_results BColor = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
+            u32 Color = GetColorForPixel(BColor,V0Color,V1Color,V2Color);
+            
             PlotPixel(Backbuffer, XIndex, YIndex, Color);
         }
     }
@@ -416,7 +457,8 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Ve
 }
 
 void
-DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, u32 Color)
+DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, 
+             v3 V0Color,v3 V1Color, v3 V2Color)
 {
     // NOTE(shvayko): Sort vertices from smallest to the biggest
     // V0 Smallest Y - V2 Biggest Y. Top-down
@@ -442,6 +484,8 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, u3
         Vertex1 = Temp;
     }
     
+    // NOTE(shvayko): Color interpolation
+    
     if(Vertex0.y == Vertex1.y) // NOTE(shvayko): Flat top triangle
     {
         
@@ -452,7 +496,7 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, u3
             Vertex1 = Temp;
         }
         
-        DrawFlatTopTriangle(Backbuffer,Vertex0,Vertex2,Vertex1,Color);
+        DrawFlatTopTriangle(Backbuffer,Vertex0,Vertex2,Vertex1,V0Color,V1Color, V2Color);
     }
     else if(Vertex1.y == Vertex2.y)  // NOTE(shvayko): Flat bottom triangle
     {
@@ -465,7 +509,7 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, u3
         }
         
         
-        DrawFlatBottomTriangle(Backbuffer, Vertex0,Vertex1,Vertex2, Color);
+        DrawFlatBottomTriangle(Backbuffer, Vertex0,Vertex1,Vertex2, V0Color,V1Color, V2Color);
     }
     else  // NOTE(shvayko): General triangle
     {
@@ -483,15 +527,15 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, u3
         
         if(VX < Vertex1.x) // NOTE(shvayko): Left major
         {
-            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex1, Vertex, Color);
+            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex1, Vertex, V0Color,V1Color, V2Color);
             
-            DrawFlatTopTriangle(Backbuffer, Vertex1, Vertex2, Vertex, Color);
+            DrawFlatTopTriangle(Backbuffer, Vertex1, Vertex2, Vertex, V0Color,V1Color, V2Color);
         }
         else // NOTE(shvayko): Right major
         {
-            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex, Vertex1, Color);
+            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex, Vertex1, V0Color,V1Color, V2Color);
             
-            DrawFlatTopTriangle(Backbuffer, Vertex, Vertex2, Vertex1, Color);
+            DrawFlatTopTriangle(Backbuffer, Vertex, Vertex2, Vertex1, V0Color,V1Color, V2Color);
         }
     }
 }
@@ -507,17 +551,17 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     }
     
     gTrianglesCount = 0; // NOTE(shvayko): Reset
-#if 1
+#if 0
     // NOTE(shvayko): Test Cube 
     v3 FrontFaceV0 = v3f(-10.0f, 10.0f, 20.0f);
     v3 FrontFaceV1 = v3f( 10.0f, 10.0f, 20.0f);
     v3 FrontFaceV2 = v3f(-10.0f, -10.0f,20.0f);
-    AddTriangle(FrontFaceV0,FrontFaceV1,FrontFaceV2, 0x0000FF);
+    AddTriangle(FrontFaceV0,FrontFaceV1,FrontFaceV2, 0xFF00FF);
     
     v3 FrontFaceV00 = v3f(10.0f, 10.0f, 20.0f);
     v3 FrontFaceV01 = v3f(10.0f, -10.0f, 20.0f);
     v3 FrontFaceV02 = v3f(-10.0f, -10.0f,20.0f);
-    AddTriangle(FrontFaceV00,FrontFaceV01,FrontFaceV02,0x000FF);
+    AddTriangle(FrontFaceV00,FrontFaceV01,FrontFaceV02,0xFF00FF);
     
     
     v3 RightFaceV0 = v3f(10.0f, -10.0f, 20.0f);
@@ -550,12 +594,35 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     v3 LeftFaceV01 = v3f(-10.0f, -10.0f,  25.0f);
     v3 LeftFaceV02 = v3f(-10.0f, 10.0f, 25.0f);
     AddTriangle(LeftFaceV00,LeftFaceV01,LeftFaceV02,0x00FFFF);
+    
+    v3 UpFaceV0 = v3f(-10.0f,  -10.0f,  20.0f);
+    v3 UpFaceV1 = v3f(-10.0f,  -10.0f,  25.0f);
+    v3 UpFaceV2 = v3f(10.0f,  -10.0f,   25.0f);
+    AddTriangle(UpFaceV0,UpFaceV1,UpFaceV2,0x00FF00);
+    
+    v3 UpFaceV00 = v3f(10.0f, -10.0f,  20.0f);
+    v3 UpFaceV01 = v3f(10.0f, -10.0f,  25.0f);
+    v3 UpFaceV02 = v3f(-10.0f, -10.0f, 20.0f);
+    AddTriangle(UpFaceV00,UpFaceV01,UpFaceV02,0x00FF00);
+    
+    
+    v3 BottomFaceV0 = v3f(-10.0f,  10.0f,  20.0f);
+    v3 BottomFaceV1 = v3f(-10.0f,  10.0f,  25.0f);
+    v3 BottomFaceV2 = v3f(10.0f,  10.0f,   25.0f);
+    AddTriangle(BottomFaceV0,BottomFaceV1,BottomFaceV2,0x00FF00);
+    
+    v3 BottomFaceV00 = v3f(10.0f, 10.0f,  20.0f);
+    v3 BottomFaceV01 = v3f(10.0f, 10.0f,  25.0f);
+    v3 BottomFaceV02 = v3f(-10.0f,10.0f, 20.0f);
+    AddTriangle(BottomFaceV00,BottomFaceV01,BottomFaceV02,0x00FF00);
+    
 #else
     // NOTE(shvayko): Test triangle where 2 vertices beyond near clipping plane
     v3 LeftFaceV00 = v3f(5.0f, -10.0f,  20.0f);
     v3 LeftFaceV01 = v3f(10.0f, -10.0f, 20.0f);
-    v3 LeftFaceV02 = v3f(7.0f, 10.0f,   3.0f);
-    AddTriangle(LeftFaceV00,LeftFaceV01,LeftFaceV02,0x00FFFF);
+    v3 LeftFaceV02 = v3f(7.0f, 10.0f,   20.0f);
+    AddTriangle(LeftFaceV00,LeftFaceV01,LeftFaceV02,
+                v3f(0xFF,0,0),v3f(0,0xFF,0),v3f(0,0,0xFF));
 #endif
     ClearBackbuffer(Backbuffer);
     
@@ -578,11 +645,6 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
         dX += 0.01f;
     }
     
-#if 1
-#if 0
-    gTriangles[0].Vertex[2].x += dX;
-    gTriangles[0].Vertex[2].z += dZ;
-#else
     MoveTriangle(0,dX,0,dZ);
     MoveTriangle(1,dX,0,dZ);
     MoveTriangle(2,dX,0,dZ);
@@ -592,13 +654,15 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     MoveTriangle(6,dX,0,dZ);
     MoveTriangle(7,dX,0,dZ);
     MoveTriangle(8,dX,0,dZ);
-#endif
-#if 0
+    MoveTriangle(9,dX,0,dZ);
+    MoveTriangle(10,dX,0,dZ);
+    MoveTriangle(11,dX,0,dZ);
+#if 0 
     static f32 Angle = 0.001f;
     Angle += 0.001f;
     // NOTE(shvayko): Testing rotations
     for(u32 Index = 0;
-        Index < 8;
+        Index < 12;
         Index++)
     {
         for(u32 VertexIndex = 0;
@@ -610,9 +674,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     }
 #endif
     
-#endif
-    
-    f32 FOV = 90.0f; // NOTE(shvayko): 
+    f32 FOV = 90.0f; // NOTE(shvayko): Field of View
     f32 n = 1.0f; // NOTE: Near plane
     f32 f = 15.0f; // NOTE: Far plane
     f32 AspectRatio = (f32)WINDOW_WIDTH / (f32)WINDOW_HEIGHT;
@@ -631,7 +693,6 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                                &ClipV0, &ClipV1, &ClipV2);
         
         // NOTE(shvayko): Clipping  -1 <= x/w <= 1 ==> -w <= x <= w
-        
         // NOTE(shvayko): Clipcode for every vertex
         u32 ClipCode[3];
         memset(ClipCode,0,4*3);
@@ -756,7 +817,8 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 v3 NT1 = TmpV1;
                 v3 NT2 = TmpV2;
                 
-                AddTriangle(NT0,NT1,NT2,Triangle->Color);
+                AddTriangle(NT0,NT1,NT2,Triangle->V0Color,Triangle->V1Color,
+                            Triangle->V2Color);
                 
             }
             else if(VerticesInsideZRange == 2)
@@ -811,8 +873,10 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 
                 // NOTE(shvayko): Split into 2 triangles
                 
-                AddTriangle(TmpV0,v3f(X1i,Y1i,1.1f),TmpV1,Triangle->Color);
-                AddTriangle(TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f),Triangle->Color);
+                AddTriangle(TmpV0,v3f(X1i,Y1i,1.1f),TmpV1,Triangle->V0Color,Triangle->V1Color,
+                            Triangle->V2Color);
+                AddTriangle(TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f),Triangle->V0Color,Triangle->V1Color,
+                            Triangle->V2Color);
             }
             else
             {
@@ -835,7 +899,9 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
             Viewport(NdcV0,NdcV1,NdcV2,&WinPV0,&WinPV1,&WinPV2,ClipV0.z,ClipV1.z,ClipV2.z);
             
             // NOTE(shvayko): Rasterization Stage
-            DrawTriangle(Backbuffer,WinPV0,WinPV1,WinPV2, Triangle->Color);
+            DrawTriangle(Backbuffer,WinPV0,WinPV1,WinPV2,
+                         Triangle->V0Color,Triangle->V1Color,
+                         Triangle->V2Color);
         }
     }
 }

@@ -46,6 +46,10 @@ typedef struct v3f
         {
             f32 x,y,z;
         };
+        struct
+        {
+            f32 r,g,b;
+        };
     };
 }v3;
 

@@ -76,3 +76,9 @@ operator*(f32 A, v3 B)
     return Result;
 }
 
+inline f32
+Square(f32 X)
+{
+    f32 Result = X*X;
+    return Result;
+}
