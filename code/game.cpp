@@ -8,6 +8,8 @@
 #define Radians(X) (X * PI / 180.0f)
 #define SCREEN_CENTER 0.5f*v3f((f32)WINDOW_WIDTH,(f32)WINDOW_HEIGHT,0.0f)
 #define MAX_TRIANGLES 9064
+#define MAX_MODELS 1024
+#define MAX_POLYGONS_IN_MODEL 1024
 
 #define CLIPCODE_X_GREATER (1 << 0) 
 #define CLIPCODE_X_LOWER   (1 << 1)
@@ -20,6 +22,19 @@
 #define CLIPCODE_Z_GREATER (1 << 6)
 #define CLIPCODE_Z_LOWER   (1 << 7)
 #define CLIPCODE_Z_INSIDE  (1 << 8)
+
+
+#define ClippingBit_XGreater  0
+#define ClippingBit_XLower    1 
+#define ClippingBit_XInside   2 
+
+#define ClippingBit_YGreater  3
+#define ClippingBit_YLower    4
+#define ClippingBit_YInside   5 
+
+#define ClippingBit_ZGreater  6
+#define ClippingBit_ZLower    7
+#define ClippingBit_ZInside   8 
 
 global bool gIsInit = false;
 global v3 gCameraP;
@@ -40,8 +55,21 @@ struct triangle
     v3 V2Color;
 };
 
+
 global u32 gTrianglesCount;
 global triangle gTriangles[MAX_TRIANGLES];
+
+
+struct cube_model
+{
+    v3 WorldP;
+    
+    u32 PolysCount;
+    triangle Polys[MAX_POLYGONS_IN_MODEL];
+};
+
+global cube_model CubeModels[MAX_MODELS];
+global u32 gCubeModelsCount;
 
 bool
 IsBitSet(u32 Test,u32 Offset)
@@ -56,13 +84,13 @@ IsTrivialReject(u32 *ClipCode, u32 Dim)
     
     if(Dim == 0)
     {
-        if((IsBitSet(ClipCode[0],0) &&
-            IsBitSet(ClipCode[1],0) && 
-            IsBitSet(ClipCode[2],0)) ||
+        if((IsBitSet(ClipCode[0],ClippingBit_XGreater) &&
+            IsBitSet(ClipCode[1],ClippingBit_XGreater) && 
+            IsBitSet(ClipCode[2],ClippingBit_XGreater)) ||
            
-           (IsBitSet(ClipCode[0],1) &&
-            IsBitSet(ClipCode[1],1) &&
-            IsBitSet(ClipCode[2],1)))
+           (IsBitSet(ClipCode[0],ClippingBit_XLower) &&
+            IsBitSet(ClipCode[1],ClippingBit_XLower) &&
+            IsBitSet(ClipCode[2],ClippingBit_XLower)))
         {
             return true;
         }
@@ -70,26 +98,26 @@ IsTrivialReject(u32 *ClipCode, u32 Dim)
     }
     else if(Dim == 1)
     {
-        if((IsBitSet(ClipCode[0],3)  &&
-            IsBitSet(ClipCode[1],3)  && 
-            IsBitSet(ClipCode[2],3)) ||
+        if((IsBitSet(ClipCode[0],ClippingBit_YGreater)  &&
+            IsBitSet(ClipCode[1],ClippingBit_YGreater)  && 
+            IsBitSet(ClipCode[2],ClippingBit_YGreater)) ||
            
-           (IsBitSet(ClipCode[0],4) &&
-            IsBitSet(ClipCode[1],4) &&
-            IsBitSet(ClipCode[2],4)))
+           (IsBitSet(ClipCode[0],ClippingBit_YLower) &&
+            IsBitSet(ClipCode[1],ClippingBit_YLower) &&
+            IsBitSet(ClipCode[2],ClippingBit_YLower)))
         {
             return true;
         }
     }
     else if(Dim == 2)
     {
-        if((IsBitSet(ClipCode[0],6)  &&
-            IsBitSet(ClipCode[1],6)  && 
-            IsBitSet(ClipCode[2],6)) ||
+        if((IsBitSet(ClipCode[0],ClippingBit_ZGreater)  &&
+            IsBitSet(ClipCode[1],ClippingBit_ZGreater)  && 
+            IsBitSet(ClipCode[2],ClippingBit_ZGreater)) ||
            
-           (IsBitSet(ClipCode[0],7) &&
-            IsBitSet(ClipCode[1],7) &&
-            IsBitSet(ClipCode[2],7)))
+           (IsBitSet(ClipCode[0],ClippingBit_ZLower) &&
+            IsBitSet(ClipCode[1],ClippingBit_ZLower) &&
+            IsBitSet(ClipCode[2],ClippingBit_ZLower)))
         {
             return true;
         }
@@ -102,6 +130,37 @@ IsTrivialReject(u32 *ClipCode, u32 Dim)
 }
 
 global f32 gDepthBuffer[WINDOW_HEIGHT][WINDOW_WIDTH];
+
+internal void
+ClearDepthBuffer()
+{
+    for(u32 Y = 0;
+        Y < WINDOW_HEIGHT;
+        Y++)
+    {
+        for(u32 X = 0;
+            X < WINDOW_WIDTH;
+            X++)
+        {
+            gDepthBuffer[Y][X] = 1.0f;
+        }
+    }
+}
+
+internal f32
+InterpolateDepth(f32 Depth0, f32 Depth1, f32 Depth2,
+                 f32 W0, f32 W1, f32 W2)
+{
+    f32 Result = 0;
+    
+    f32 D0 = Depth0 * W0;
+    f32 D1 = Depth1 * W1;
+    f32 D2 = Depth2 * W2;
+    
+    Result = D0 + D1 + D2;
+    
+    return Result;
+}
 
 internal f32
 GetValueFromDepthBufferAt(s32 X,s32 Y)
@@ -120,7 +179,7 @@ SetValueToDepthBufferAt(s32 X, s32 Y, f32 Value)
 internal void
 AddTriangle(v3 V0, v3 V1, v3 V2, v3 V0Color,v3 V1Color,v3 V2Color)
 {
-    assert(gTrianglesCount < MAX_TRIANGLES);
+    //assert(gTrianglesCount < MAX_TRIANGLES);
     triangle *Triangle = &gTriangles[gTrianglesCount++];
     
     Triangle->Vertex[0] = V0;
@@ -163,17 +222,6 @@ CameraTransform(v3 *V0,v3 *V1,v3 *V2)
     *V2 = v3f(CameraSpaceXV2,CameraSpaceYV2,CameraSpaceZV2);
 }
 
-
-struct cube_model
-{
-    v3 WorldP;
-    
-    u32 PolysCount;
-    triangle Polys[1024];
-};
-
-global cube_model CubeModels[1024];
-global u32 gCubeModelsCount;
 
 internal void
 AddPolygonIntoModel(cube_model *Model, v3 V0, v3 V1, v3 V2,
@@ -281,6 +329,7 @@ TransformIntoClipSpace(f32 FOV,f32 n,f32 f,f32 AspectRatio,
     f32 TanHalfFov = tanf(Radians(FOV * 0.5f));
     f32 XScale = 1.0f / (TanHalfFov * AspectRatio);
     f32 YScale = 1.0f / TanHalfFov;
+    
     f32 a = f/(f-n);
     f32 b = (-2*n*f) / (f - n);
     
@@ -429,6 +478,23 @@ RotateYAroundPoint(f32 Angle, v3 P, v3 PToRotateAround)
     return RotateAroundY(Angle, P - PToRotateAround) + PToRotateAround;
 }
 
+internal void
+RotateCube(cube_model *Cube,f32 Angle)
+{
+    for(u32 Index = 0;
+        Index < Cube->PolysCount;
+        Index++)
+    {
+        for(u32 VertexIndex = 0;
+            VertexIndex < 3;
+            VertexIndex++)
+        {
+            Cube->Polys[Index].Vertex[VertexIndex] = RotateZAroundPoint(Angle,Cube->Polys[Index].Vertex[VertexIndex], v3f(1,1,0));
+            
+            Cube->Polys[Index].Vertex[VertexIndex] = RotateXAroundPoint(Angle,Cube->Polys[Index].Vertex[VertexIndex], v3f(0,1,1));
+        }
+    }
+}
 
 void
 PlotPixel(game_backbuffer *Backbuffer, u32 X, u32 Y, u32 Color)
@@ -489,7 +555,7 @@ GetColorForPixel(barycentric_results BColor,v3 V0Color,v3 V1Color,v3 V2Color)
 }
 
 void
-DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, v3 V0Color,v3 V1Color, v3 V2Color)
+DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, v3 V0Color,v3 V1Color, v3 V2Color, f32 DepthV0,f32 DepthV1,f32 DepthV2)
 {
     // NOTE(shvayko): change in x per y
     f32 SlopeLeftSide = (Vertex1.x - Vertex2.x) / (Vertex1.y - Vertex2.y);
@@ -541,23 +607,24 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vert
             XIndex < xEnd;
             XIndex++)
         {
-            //f32 DepthValue = GetValueFromDepthBufferAt(XIndex,YIndex);
-            //f32 ComputedZ = Vertex1.z;
-            //if(ComputedZ < DepthValue)
-            //{
-            // TODO(shvayko): F Depth = (Z - Near) / (Far - Near);
-            //SetValueToDepthBufferAt(XIndex,YIndex, ComputedZ);
-            barycentric_results BColor = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
-            u32 Color = GetColorForPixel(BColor,V0Color,V1Color,V2Color);
-            PlotPixel(Backbuffer, XIndex, YIndex, Color);
-            //}
+            f32 DepthValue = GetValueFromDepthBufferAt(XIndex,YIndex);
+            
+            barycentric_results BarycentricWeights = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
+            f32 InterpolatedZ = InterpolateDepth(DepthV0,DepthV1,DepthV2,BarycentricWeights.W0,BarycentricWeights.W1,BarycentricWeights.W2);
+            if(InterpolatedZ < DepthValue)
+            {
+                SetValueToDepthBufferAt(XIndex,YIndex, InterpolatedZ);
+                
+                u32 Color = GetColorForPixel(BarycentricWeights,V0Color,V1Color,V2Color);
+                PlotPixel(Backbuffer, XIndex, YIndex, Color);
+            }
         }
     }
     
 }
 
 void
-DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Vertex2, v3 V0Color,v3 V1Color, v3 V2Color)
+DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0,v3 Vertex1,v3 Vertex2, v3 V0Color,v3 V1Color, v3 V2Color,f32 DepthV0,f32 DepthV1,f32 DepthV2)
 {
     // NOTE(shvayko): change in x per y
     f32 SlopeLeftSide = (Vertex2.x  - Vertex0.x) / (Vertex1.y - Vertex0.y);
@@ -610,10 +677,19 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Ve
             XIndex < xEnd;
             XIndex++)
         {
-            barycentric_results BColor = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
-            u32 Color = GetColorForPixel(BColor,V0Color,V1Color,V2Color);
+            f32 DepthValue = GetValueFromDepthBufferAt(XIndex,YIndex);
             
-            PlotPixel(Backbuffer, XIndex, YIndex, Color);
+            barycentric_results BarycentricWeights = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
+            
+            f32 InterpolatedZ = InterpolateDepth(DepthV0,DepthV1,DepthV2,BarycentricWeights.W0,BarycentricWeights.W1,BarycentricWeights.W2);
+            
+            if(InterpolatedZ < DepthValue)
+            {
+                SetValueToDepthBufferAt(XIndex,YIndex, InterpolatedZ);
+                u32 Color = GetColorForPixel(BarycentricWeights,V0Color,V1Color,V2Color);
+                
+                PlotPixel(Backbuffer, XIndex, YIndex, Color);
+            }
         }
     }
     
@@ -621,7 +697,7 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0, v3 Vertex1, v3 Ve
 
 void
 DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, 
-             v3 V0Color,v3 V1Color, v3 V2Color)
+             v3 V0Color,v3 V1Color, v3 V2Color, f32 ZDepthV0, f32 ZDepthV1, f32 ZDepthV2)
 {
     // NOTE(shvayko): Sort vertices from smallest to the biggest
     // V0 Smallest Y - V2 Biggest Y. Top-down
@@ -659,7 +735,8 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
             Vertex1 = Temp;
         }
         
-        DrawFlatTopTriangle(Backbuffer,Vertex0,Vertex2,Vertex1,V0Color,V1Color, V2Color);
+        DrawFlatTopTriangle(Backbuffer,Vertex0,Vertex2,Vertex1,V0Color,V1Color,V2Color,
+                            ZDepthV0, ZDepthV1,ZDepthV2);
     }
     else if(Vertex1.y == Vertex2.y)  // NOTE(shvayko): Flat bottom triangle
     {
@@ -672,7 +749,7 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
         }
         
         
-        DrawFlatBottomTriangle(Backbuffer, Vertex0,Vertex1,Vertex2, V0Color,V1Color, V2Color);
+        DrawFlatBottomTriangle(Backbuffer, Vertex0,Vertex1,Vertex2, V0Color,V1Color, V2Color,ZDepthV0, ZDepthV1,ZDepthV2);
     }
     else  // NOTE(shvayko): General triangle
     {
@@ -690,15 +767,15 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
         
         if(VX < Vertex1.x) // NOTE(shvayko): Left major
         {
-            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex1, Vertex, V0Color,V1Color, V2Color);
+            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex1, Vertex, V0Color,V1Color, V2Color,ZDepthV0, ZDepthV1,ZDepthV2);
             
-            DrawFlatTopTriangle(Backbuffer, Vertex1, Vertex2, Vertex, V0Color,V1Color, V2Color);
+            DrawFlatTopTriangle(Backbuffer, Vertex1, Vertex2, Vertex, V0Color,V1Color, V2Color, ZDepthV0,ZDepthV1,ZDepthV2);
         }
         else // NOTE(shvayko): Right major
         {
-            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex, Vertex1, V0Color,V1Color, V2Color);
+            DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex, Vertex1, V0Color,V1Color, V2Color,ZDepthV0, ZDepthV1,ZDepthV2);
             
-            DrawFlatTopTriangle(Backbuffer, Vertex, Vertex2, Vertex1, V0Color,V1Color, V2Color);
+            DrawFlatTopTriangle(Backbuffer, Vertex, Vertex2, Vertex1, V0Color,V1Color, V2Color,ZDepthV0,ZDepthV1,ZDepthV2);
         }
     }
 }
@@ -721,23 +798,15 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     cube_model *Cube = CreateCube(v3f(1,0,6));
     cube_model *CubeSecond = CreateCube(v3f(5.8f,0,7));
     
-    for(u32 Y = 0;
-        Y < WINDOW_HEIGHT;
-        Y++)
-    {
-        for(u32 X = 0;
-            X < WINDOW_WIDTH;
-            X++)
-        {
-            gDepthBuffer[Y][X] = INFINITY;
-        }
-    }
+    ClearDepthBuffer();
     
     // NOTE(shvayko): Test Cube 
     
     ClearBackbuffer(Backbuffer);
+    
     persist v3 P = Cube->WorldP;
     persist v3 P0 = CubeSecond->WorldP;
+    
     if(IsButtonDown(ButtonUp))
     {
         P.z += 0.1f;
@@ -756,25 +825,16 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     }
     
     
-    
     TranslateCube(Cube,P);
     TranslateCube(CubeSecond,P0);
     
     
-#if 0 
-    static f32 Angle = 0.001f;
-    Angle += 0.001f;
-    // NOTE(shvayko): Testing rotations
-    for(u32 Index = 0;
-        Index < 12;
-        Index++)
+#if 1
     {
-        for(u32 VertexIndex = 0;
-            VertexIndex < 3;
-            VertexIndex++)
-        {
-            gTriangles[Index].Vertex[VertexIndex] = RotateZAroundPoint(Angle, gTriangles[Index].Vertex[VertexIndex], v3f(1,1,0));
-        }
+        // NOTE(shvayko): Testing rotations
+        persist f32 Angle = 0.001f;
+        RotateCube(CubeSecond,Angle);
+        Angle += 0.01f;
     }
 #endif
     
@@ -868,9 +928,9 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
             
             
             // NOTE(shvayko):Check if any vertex lying beyond near plane
-            if(IsBitSet(ClipCode[0],7) ||
-               IsBitSet(ClipCode[1],7) ||
-               IsBitSet(ClipCode[2],7))
+            if(IsBitSet(ClipCode[0],ClippingBit_ZLower) ||
+               IsBitSet(ClipCode[1],ClippingBit_ZLower) ||
+               IsBitSet(ClipCode[2],ClippingBit_ZLower))
             {
                 if(VerticesInsideZRange == 1)
                 {
@@ -881,13 +941,13 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                     // NOTE(shvayko): TmpV0 - Interior vertex; TmpV1 - Exterior vertex; 
                     // TmpV2 - Exterior vertex
                     v3 TmpV0,TmpV1,TmpV2;
-                    if(IsBitSet(ClipCode[0],8))
+                    if(IsBitSet(ClipCode[0],ClippingBit_ZInside))
                     {
                         TmpV0 = V0;
                         TmpV1 = V1;
                         TmpV2 = V2;
                     }
-                    else if(IsBitSet(ClipCode[1],8))
+                    else if(IsBitSet(ClipCode[1],ClippingBit_ZInside))
                     {
                         TmpV0 = V1;
                         TmpV1 = V0;
@@ -929,9 +989,6 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                     v3 NT2 = TmpV2;
                     
                     AddPolygonIntoModel(Model, NT0,NT1,NT2, Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
-                    //Triangle->V2Color);
-                    //AddTriangle(NT0,NT1,NT2,Triangle->V0Color,Triangle->V1Color,
-                    //Triangle->V2Color);
                     
                 }
                 else if(VerticesInsideZRange == 2)
@@ -944,10 +1001,10 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                     // TmpV2 - Exterior vertex
                     
                     v3 TmpV0,TmpV1,TmpV2;
-                    if(IsBitSet(ClipCode[0],8))
+                    if(IsBitSet(ClipCode[0],ClippingBit_ZInside))
                     {
                         TmpV0 = V0;
-                        if(IsBitSet(ClipCode[1],8))
+                        if(IsBitSet(ClipCode[1],ClippingBit_ZInside))
                         {
                             TmpV1 = V1;
                             TmpV2 = V2;
@@ -958,7 +1015,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                             TmpV2 = V1;
                         }
                     } 
-                    else if(IsBitSet(ClipCode[1],8))
+                    else if(IsBitSet(ClipCode[1],ClippingBit_ZInside))
                     {
                         TmpV0 = V1;
                         TmpV1 = V2;
@@ -987,11 +1044,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                     // NOTE(shvayko): Split into 2 triangles
                     AddPolygonIntoModel(Model, TmpV0,v3f(X1i,Y1i,1.1f),TmpV1, Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
                     AddPolygonIntoModel(Model, TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f), Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
-                    /*
-                    AddTriangle(TmpV0,v3f(X1i,Y1i,1.1f),TmpV1,Triangle->V0Color,Triangle->V1Color,
-                                Triangle->V2Color);
-                    AddTriangle(TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f),Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
-*/
+                    
                 }
                 else
                 {
@@ -1002,7 +1055,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
             {
                 // NOTE(shvayko): All vertices is in Z range. Process without any clipping
                 
-                // NOTE(shvayko): Pespective divide. (Transforming from Clip Space into NDC space)
+                // NOTE(shvayko): Pespective divide. (Transforming from Clip Space into NDC space(Z from 0 to 1))
                 
                 v3 NdcV0,NdcV1,NdcV2;
                 TransformHomogeneousToNDC(ClipV0,ClipV1,ClipV2,&NdcV0,&NdcV1,&NdcV2);
@@ -1015,8 +1068,8 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                 
                 // NOTE(shvayko): Rasterization Stage
                 DrawTriangle(Backbuffer,WinPV0,WinPV1,WinPV2,
-                             Triangle->V0Color,Triangle->V1Color,
-                             Triangle->V2Color);
+                             Triangle->V0Color,Triangle->V1Color,Triangle->V2Color,
+                             NdcV0.z,NdcV1.z,NdcV2.z);
             }
         }
     }
