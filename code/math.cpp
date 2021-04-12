@@ -108,3 +108,13 @@ CrossProduct(v3 A, v3 B)
     
     return Result;
 }
+
+inline f32
+DotProduct(v3 A, v3 B)
+{
+    f32 Result = 0;
+    
+    Result = A.x*B.x+A.y*B.y+A.z*B.z;
+    
+    return Result;
+}

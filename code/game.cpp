@@ -132,7 +132,7 @@ IsTrivialReject(u32 *ClipCode, u32 Dim)
 global f32 gDepthBuffer[WINDOW_HEIGHT][WINDOW_WIDTH];
 
 internal void
-ClearDepthBuffer()
+ClearDepthBuffer(f32 InitialDepthValue)
 {
     for(u32 Y = 0;
         Y < WINDOW_HEIGHT;
@@ -142,7 +142,7 @@ ClearDepthBuffer()
             X < WINDOW_WIDTH;
             X++)
         {
-            gDepthBuffer[Y][X] = 1.0f;
+            gDepthBuffer[Y][X] = InitialDepthValue;
         }
     }
 }
@@ -192,7 +192,7 @@ AddTriangle(v3 V0, v3 V1, v3 V2, v3 V0Color,v3 V1Color,v3 V2Color)
 
 
 internal void
-CameraTransform(v3 *V0,v3 *V1,v3 *V2)
+CameraTransform(v3 *V0,v3 *V1,v3 *V2, v3 WorldP)
 {
     v3 TemporaryUp = v3f(0.0f,1.0f,0.0f);
     
@@ -205,17 +205,34 @@ CameraTransform(v3 *V0,v3 *V1,v3 *V2)
     v3 CameraUp = CrossProduct(CameraRight,CameraD);
     CameraUp = Normalize(CameraUp);
     
-    f32 CameraSpaceXV0 = CameraRight.x*V0->x+CameraRight.y*V0->y+CameraRight.z*V0->z;
-    f32 CameraSpaceYV0 = CameraUp.x*V0->x+CameraUp.y*V0->y+CameraUp.z*V0->z;
-    f32 CameraSpaceZV0 = CameraD.x*V0->x+CameraD.y*V0->y+CameraD.z*V0->z;
+    f32 DP0 = DotProduct(CameraRight, gCameraP);
+    f32 DP1 = DotProduct(CameraUp, gCameraP);
+    f32 DP2 = DotProduct(CameraD, gCameraP);
     
-    f32 CameraSpaceXV1 = CameraRight.x*V1->x+CameraRight.y*V1->y+CameraRight.z*V1->z;
-    f32 CameraSpaceYV1 = CameraUp.x*V1->x+CameraUp.y*V1->y+CameraUp.z*V1->z;
-    f32 CameraSpaceZV1 = CameraD.x*V1->x+CameraD.y*V1->y+CameraD.z*V1->z;
+    /*
+x_axis.x  x_axis.y  x_axis.z  -dot(x_axis,eye)   |x|
+  y_axis.x  y_axis.y  y_axis.z  -dot(y_axis,eye)   |y|
+  z_axis.x  z_axis.y  z_axis.z  -dot(z_axis,eye)   |z|
+                      
+=>
+
+x = x_axis.x*x + x_axis.y*y + x_axis.z * z - dot
+ y = y_axis.x*x + y_axis.y*y + y_axis.z * z - dot
+ z = z_axis.x*x + z_axis.y*y + z_axis.z * z - dot
+
+*/
     
-    f32 CameraSpaceXV2 = CameraRight.x*V2->x+CameraRight.y*V2->y+CameraRight.z*V2->z;
-    f32 CameraSpaceYV2 = CameraUp.x*V2->x+CameraUp.y*V2->y+CameraUp.z*V2->z;
-    f32 CameraSpaceZV2 = CameraD.x*V2->x+CameraD.y*V2->y+CameraD.z*V2->z;
+    f32 CameraSpaceXV0 = -CameraRight.x*V0->x+CameraRight.y*V0->y+CameraRight.z*V0->z - DP0;
+    f32 CameraSpaceYV0 = CameraUp.x*V0->x+CameraUp.y*V0->y+CameraUp.z*V0->z - DP1;
+    f32 CameraSpaceZV0 = CameraD.x*V0->x+CameraD.y*V0->y+CameraD.z*V0->z - DP2;
+    
+    f32 CameraSpaceXV1 = -CameraRight.x*V1->x+CameraRight.y*V1->y+CameraRight.z*V1->z - DP0;
+    f32 CameraSpaceYV1 = CameraUp.x*V1->x+CameraUp.y*V1->y+CameraUp.z*V1->z - DP1;
+    f32 CameraSpaceZV1 = CameraD.x*V1->x+CameraD.y*V1->y+CameraD.z*V1->z - DP2;
+    
+    f32 CameraSpaceXV2 = -CameraRight.x*V2->x+CameraRight.y*V2->y+CameraRight.z*V2->z - DP0;
+    f32 CameraSpaceYV2 = CameraUp.x*V2->x+CameraUp.y*V2->y+CameraUp.z*V2->z - DP1;
+    f32 CameraSpaceZV2 = CameraD.x*V2->x+CameraD.y*V2->y+CameraD.z*V2->z - DP2;
     
     *V0 = v3f(CameraSpaceXV0,CameraSpaceYV0,CameraSpaceZV0);
     *V1 = v3f(CameraSpaceXV1,CameraSpaceYV1,CameraSpaceZV1);
@@ -252,32 +269,32 @@ CreateCube(v3 InitWorldP)
     v3 RightFaceV0 = v3f(1.0f, -1.0f, 1.0f);
     v3 RightFaceV1 = v3f(1.0f, 1.0f,  1.0f);
     v3 RightFaceV2 = v3f(1.0f, -1.0f, 2.0f);
-    AddPolygonIntoModel(Result,RightFaceV0,RightFaceV1,RightFaceV2,v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    AddPolygonIntoModel(Result,RightFaceV0,RightFaceV1,RightFaceV2,v3f(1.0f,0,0),v3f(1.0f,0.0f,0),v3f(1.0,0,0.0f));
     
     v3 RightFaceV00 = v3f(1.0f, 1.0f, 1.0f);
     v3 RightFaceV01 = v3f(1.0f, 1.0f, 2.0f);
     v3 RightFaceV02 = v3f(1.0f, -1.0f,2.0f);
-    AddPolygonIntoModel(Result,RightFaceV00,RightFaceV01,RightFaceV02,v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    AddPolygonIntoModel(Result,RightFaceV00,RightFaceV01,RightFaceV02,v3f(1.0f,0,0),v3f(1.0f,0.0f,0),v3f(1.0f,0,0.0f));
     
     v3 BackFaceV0 = v3f(1.0f, 1.0f,  2.0f);
     v3 BackFaceV1 = v3f(1.0f, -1.0f, 2.0f);
     v3 BackFaceV2 = v3f(-1.0f, 1.0f, 2.0f);
-    AddPolygonIntoModel(Result,BackFaceV0,BackFaceV1,BackFaceV2,v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    AddPolygonIntoModel(Result,BackFaceV0,BackFaceV1,BackFaceV2,v3f(0.0f,1.0f,0),v3f(0,1.0f,0),v3f(0,1.0f,0.0f));
     
     v3 BackFaceV00 = v3f(1.0f, -1.0f, 2.0f);
     v3 BackFaceV01 = v3f(-1.0f, -1.0f,2.0f);
     v3 BackFaceV02 = v3f(-1.0f, 1.0f, 2.0f);
-    AddPolygonIntoModel(Result,BackFaceV00,BackFaceV01,BackFaceV02,v3f(1.0f,0,0),v3f(0,0.0f,0),v3f(0,0,0.0f));
+    AddPolygonIntoModel(Result,BackFaceV00,BackFaceV01,BackFaceV02,v3f(0.0f,1.0f,0),v3f(0,1.0f,0),v3f(0,1.0f,0.0f));
     
     v3 LeftFaceV0 = v3f(-1.0f, 1.0f, 1.0f);
     v3 LeftFaceV1 = v3f(-1.0f, -1.0f,1.0f);
     v3 LeftFaceV2 = v3f(-1.0f, 1.0f, 2.0f);
-    AddPolygonIntoModel(Result,LeftFaceV0,LeftFaceV1,LeftFaceV2,v3f(0.6f,0,0),v3f(0,0.0f,0),v3f(0,0,0.6f));
+    AddPolygonIntoModel(Result,LeftFaceV0,LeftFaceV1,LeftFaceV2,v3f(0.0f,0,1.0f),v3f(0,0.0f,1.0f),v3f(0,0,1.0f));
     
     v3 LeftFaceV00 = v3f(-1.0f, -1.0f, 1.0f);
     v3 LeftFaceV01 = v3f(-1.0f, -1.0f, 2.0f);
     v3 LeftFaceV02 = v3f(-1.0f, 1.0f,  2.0f);
-    AddPolygonIntoModel(Result,LeftFaceV00,LeftFaceV01,LeftFaceV02,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    AddPolygonIntoModel(Result,LeftFaceV00,LeftFaceV01,LeftFaceV02,v3f(0.0f,0,1.0f),v3f(0,0.0f,1.0f),v3f(0,0,1.0f));
     
     v3 UpFaceV0 = v3f(-1.0f,  -1.0f,  1.0f);
     v3 UpFaceV1 = v3f(-1.0f,  -1.0f,  2.0f);
@@ -330,7 +347,7 @@ TransformIntoClipSpace(f32 FOV,f32 n,f32 f,f32 AspectRatio,
     f32 XScale = 1.0f / (TanHalfFov * AspectRatio);
     f32 YScale = 1.0f / TanHalfFov;
     
-    f32 a = f/(f-n);
+    f32 a = (n+f)/(f-n);
     f32 b = (-2*n*f) / (f - n);
     
     ClipSpaceV0Out->x = RawV0.x * XScale;
@@ -611,7 +628,7 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vert
             
             barycentric_results BarycentricWeights = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
             f32 InterpolatedZ = InterpolateDepth(DepthV0,DepthV1,DepthV2,BarycentricWeights.W0,BarycentricWeights.W1,BarycentricWeights.W2);
-            if(InterpolatedZ < DepthValue)
+            if(InterpolatedZ <= DepthValue)
             {
                 SetValueToDepthBufferAt(XIndex,YIndex, InterpolatedZ);
                 
@@ -683,7 +700,7 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0,v3 Vertex1,v3 Vert
             
             f32 InterpolatedZ = InterpolateDepth(DepthV0,DepthV1,DepthV2,BarycentricWeights.W0,BarycentricWeights.W1,BarycentricWeights.W2);
             
-            if(InterpolatedZ < DepthValue)
+            if(InterpolatedZ <= DepthValue)
             {
                 SetValueToDepthBufferAt(XIndex,YIndex, InterpolatedZ);
                 u32 Color = GetColorForPixel(BarycentricWeights,V0Color,V1Color,V2Color);
@@ -780,7 +797,6 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
     }
 }
 
-
 void
 GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
 {
@@ -795,10 +811,10 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     gCubeModelsCount = 0;
     memset(CubeModels,0,sizeof(cube_model)*1024);
     
-    cube_model *Cube = CreateCube(v3f(1,0,6));
+    cube_model *Cube = CreateCube(v3f(1,0,13));
     cube_model *CubeSecond = CreateCube(v3f(5.8f,0,7));
     
-    ClearDepthBuffer();
+    ClearDepthBuffer(1.0f);
     
     // NOTE(shvayko): Test Cube 
     
@@ -856,7 +872,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
             v3 V1 = Triangle->Vertex[1];
             v3 V2 = Triangle->Vertex[2];
             
-            //CameraTransform(&V0,&V1,&V2);
+            CameraTransform(&V0,&V1,&V2, Model->WorldP);
             
             // NOTE(shvayko): Transform to clip space
             v4 ClipV0,ClipV1,ClipV2;
@@ -972,7 +988,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                     f32 y = TmpV1.y + (TmpV0.y - TmpV1.y)*t;
                     f32 z = TmpV1.z + (TmpV0.z - TmpV1.z)*t;
                     
-                    TmpV1 = v3f(x,y,1.1f);
+                    TmpV1 = v3f(x,y,1.0f);
                     // NOTE(shvayko): TmpV0 and TmpV2
                     
                     f32 t1 = (1.0f - TmpV2.z) / (TmpV0.z - TmpV2.z); 
@@ -981,7 +997,7 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                     y = TmpV2.y + (TmpV0.y - TmpV2.y)*t1;
                     z = TmpV2.z + (TmpV0.z - TmpV2.z)*t1;
                     
-                    TmpV2 = v3f(x,y,1.1f);
+                    TmpV2 = v3f(x,y,1.0f);
                     
                     // NOTE(shvayko): New triangle
                     v3 NT0 = TmpV0;
@@ -1042,8 +1058,8 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
                     f32 Z1i = TmpV2.z + (TmpV1.z - TmpV2.z)*t1;
                     
                     // NOTE(shvayko): Split into 2 triangles
-                    AddPolygonIntoModel(Model, TmpV0,v3f(X1i,Y1i,1.1f),TmpV1, Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
-                    AddPolygonIntoModel(Model, TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f), Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
+                    AddPolygonIntoModel(Model, TmpV0,v3f(X1i,Y1i,1.0f),TmpV1, Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
+                    AddPolygonIntoModel(Model, TmpV0,v3f(X0i,Y0i,1.0f),v3f(X1i,Y1i,1.0f), Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
                     
                 }
                 else
