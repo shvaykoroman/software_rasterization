@@ -1,6 +1,7 @@
+#include "math.cpp"
+
 #define IsButtonDown(Button) (Input->Controller[0].Button.IsDown)
 #define BBP 4
-#include "math.cpp"
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
@@ -19,6 +20,10 @@
 #define CLIPCODE_Z_GREATER (1 << 6)
 #define CLIPCODE_Z_LOWER   (1 << 7)
 #define CLIPCODE_Z_INSIDE  (1 << 8)
+
+global bool gIsInit = false;
+global v3 gCameraP;
+global v3 gCameraTarget; 
 
 enum
 {
@@ -96,6 +101,177 @@ IsTrivialReject(u32 *ClipCode, u32 Dim)
     return false;
 }
 
+global f32 gDepthBuffer[WINDOW_HEIGHT][WINDOW_WIDTH];
+
+internal f32
+GetValueFromDepthBufferAt(s32 X,s32 Y)
+{
+    f32 Result = gDepthBuffer[Y][X];
+    return Result;
+}
+
+internal void
+SetValueToDepthBufferAt(s32 X, s32 Y, f32 Value)
+{
+    gDepthBuffer[Y][X] = Value;
+}
+
+
+internal void
+AddTriangle(v3 V0, v3 V1, v3 V2, v3 V0Color,v3 V1Color,v3 V2Color)
+{
+    assert(gTrianglesCount < MAX_TRIANGLES);
+    triangle *Triangle = &gTriangles[gTrianglesCount++];
+    
+    Triangle->Vertex[0] = V0;
+    Triangle->Vertex[1] = V1;
+    Triangle->Vertex[2] = V2;
+    Triangle->V0Color = V0Color;
+    Triangle->V1Color = V1Color;
+    Triangle->V2Color = V2Color;
+}
+
+
+internal void
+CameraTransform(v3 *V0,v3 *V1,v3 *V2)
+{
+    v3 TemporaryUp = v3f(0.0f,1.0f,0.0f);
+    
+    v3 CameraD = gCameraTarget - gCameraP;
+    CameraD = Normalize(CameraD);
+    
+    v3 CameraRight = CrossProduct(CameraD,TemporaryUp);
+    CameraRight = Normalize(CameraRight);
+    
+    v3 CameraUp = CrossProduct(CameraRight,CameraD);
+    CameraUp = Normalize(CameraUp);
+    
+    f32 CameraSpaceXV0 = CameraRight.x*V0->x+CameraRight.y*V0->y+CameraRight.z*V0->z;
+    f32 CameraSpaceYV0 = CameraUp.x*V0->x+CameraUp.y*V0->y+CameraUp.z*V0->z;
+    f32 CameraSpaceZV0 = CameraD.x*V0->x+CameraD.y*V0->y+CameraD.z*V0->z;
+    
+    f32 CameraSpaceXV1 = CameraRight.x*V1->x+CameraRight.y*V1->y+CameraRight.z*V1->z;
+    f32 CameraSpaceYV1 = CameraUp.x*V1->x+CameraUp.y*V1->y+CameraUp.z*V1->z;
+    f32 CameraSpaceZV1 = CameraD.x*V1->x+CameraD.y*V1->y+CameraD.z*V1->z;
+    
+    f32 CameraSpaceXV2 = CameraRight.x*V2->x+CameraRight.y*V2->y+CameraRight.z*V2->z;
+    f32 CameraSpaceYV2 = CameraUp.x*V2->x+CameraUp.y*V2->y+CameraUp.z*V2->z;
+    f32 CameraSpaceZV2 = CameraD.x*V2->x+CameraD.y*V2->y+CameraD.z*V2->z;
+    
+    *V0 = v3f(CameraSpaceXV0,CameraSpaceYV0,CameraSpaceZV0);
+    *V1 = v3f(CameraSpaceXV1,CameraSpaceYV1,CameraSpaceZV1);
+    *V2 = v3f(CameraSpaceXV2,CameraSpaceYV2,CameraSpaceZV2);
+}
+
+
+struct cube_model
+{
+    v3 WorldP;
+    
+    u32 PolysCount;
+    triangle Polys[1024];
+};
+
+global cube_model CubeModels[1024];
+global u32 gCubeModelsCount;
+
+internal void
+AddPolygonIntoModel(cube_model *Model, v3 V0, v3 V1, v3 V2,
+                    v3 C0, v3 C1, v3 C2)
+{
+    AddTriangle(V0,V1,V2, C0, C1, C2);
+    Model->Polys[Model->PolysCount] = gTriangles[gTrianglesCount - 1];
+    Model->PolysCount++;
+}
+
+internal cube_model*
+CreateCube(v3 InitWorldP)
+{
+    cube_model *Result = &CubeModels[gCubeModelsCount];
+    Result->WorldP = InitWorldP;
+    gCubeModelsCount += 1;
+    
+    v3 FrontFaceV0 = v3f(-1.0f, 1.0f, 1.0f);
+    v3 FrontFaceV1 = v3f( 1.0f, 1.0f, 1.0f);
+    v3 FrontFaceV2 = v3f(-1.0f, -1.0f,1.0f);
+    AddPolygonIntoModel(Result, FrontFaceV0,FrontFaceV1,FrontFaceV2, v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    
+    v3 FrontFaceV00 = v3f(1.0f, 1.0f,  1.0f);
+    v3 FrontFaceV01 = v3f(1.0f, -1.0f, 1.0f);
+    v3 FrontFaceV02 = v3f(-1.0f, -1.0f,1.0f);
+    AddPolygonIntoModel(Result,FrontFaceV00,FrontFaceV01,FrontFaceV02,v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    
+    v3 RightFaceV0 = v3f(1.0f, -1.0f, 1.0f);
+    v3 RightFaceV1 = v3f(1.0f, 1.0f,  1.0f);
+    v3 RightFaceV2 = v3f(1.0f, -1.0f, 2.0f);
+    AddPolygonIntoModel(Result,RightFaceV0,RightFaceV1,RightFaceV2,v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    
+    v3 RightFaceV00 = v3f(1.0f, 1.0f, 1.0f);
+    v3 RightFaceV01 = v3f(1.0f, 1.0f, 2.0f);
+    v3 RightFaceV02 = v3f(1.0f, -1.0f,2.0f);
+    AddPolygonIntoModel(Result,RightFaceV00,RightFaceV01,RightFaceV02,v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    
+    v3 BackFaceV0 = v3f(1.0f, 1.0f,  2.0f);
+    v3 BackFaceV1 = v3f(1.0f, -1.0f, 2.0f);
+    v3 BackFaceV2 = v3f(-1.0f, 1.0f, 2.0f);
+    AddPolygonIntoModel(Result,BackFaceV0,BackFaceV1,BackFaceV2,v3f(1.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    
+    v3 BackFaceV00 = v3f(1.0f, -1.0f, 2.0f);
+    v3 BackFaceV01 = v3f(-1.0f, -1.0f,2.0f);
+    v3 BackFaceV02 = v3f(-1.0f, 1.0f, 2.0f);
+    AddPolygonIntoModel(Result,BackFaceV00,BackFaceV01,BackFaceV02,v3f(1.0f,0,0),v3f(0,0.0f,0),v3f(0,0,0.0f));
+    
+    v3 LeftFaceV0 = v3f(-1.0f, 1.0f, 1.0f);
+    v3 LeftFaceV1 = v3f(-1.0f, -1.0f,1.0f);
+    v3 LeftFaceV2 = v3f(-1.0f, 1.0f, 2.0f);
+    AddPolygonIntoModel(Result,LeftFaceV0,LeftFaceV1,LeftFaceV2,v3f(0.6f,0,0),v3f(0,0.0f,0),v3f(0,0,0.6f));
+    
+    v3 LeftFaceV00 = v3f(-1.0f, -1.0f, 1.0f);
+    v3 LeftFaceV01 = v3f(-1.0f, -1.0f, 2.0f);
+    v3 LeftFaceV02 = v3f(-1.0f, 1.0f,  2.0f);
+    AddPolygonIntoModel(Result,LeftFaceV00,LeftFaceV01,LeftFaceV02,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,1.0f));
+    
+    v3 UpFaceV0 = v3f(-1.0f,  -1.0f,  1.0f);
+    v3 UpFaceV1 = v3f(-1.0f,  -1.0f,  2.0f);
+    v3 UpFaceV2 = v3f(1.0f,  -1.0f,   2.0f);
+    AddPolygonIntoModel(Result,UpFaceV0,UpFaceV1,UpFaceV2,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,0.0f));
+    
+    v3 UpFaceV00 = v3f(1.0f, -1.0f,  1.0f);
+    v3 UpFaceV01 = v3f(1.0f, -1.0f,  2.0f);
+    v3 UpFaceV02 = v3f(-1.0f, -1.0f, 1.0f);
+    AddPolygonIntoModel(Result,UpFaceV00,UpFaceV01,UpFaceV02,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,0.0f));
+    
+    v3 BottomFaceV0 = v3f(-1.0f,  1.0f,  1.0f);
+    v3 BottomFaceV1 = v3f(-1.0f,  1.0f,  2.0f);
+    v3 BottomFaceV2 = v3f(1.0f,  1.0f,   2.0f);
+    AddPolygonIntoModel(Result,BottomFaceV0,BottomFaceV1,BottomFaceV2,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,0.0f));
+    
+    v3 BottomFaceV00 = v3f(1.0f, 1.0f,  1.0f);
+    v3 BottomFaceV01 = v3f(1.0f, 1.0f,  2.0f);
+    v3 BottomFaceV02 = v3f(-1.0f,1.0f,  1.0f);
+    AddPolygonIntoModel(Result,BottomFaceV00,BottomFaceV01,BottomFaceV02,v3f(0,0,0),v3f(0,1,0),v3f(0,0,0));
+    
+    return Result;
+}
+
+internal void
+TranslateCube(cube_model *Cube, v3 P)
+{
+    for(u32 PolysIndex = 0;
+        PolysIndex < Cube->PolysCount;
+        PolysIndex++)
+    {
+        for(u32 VertexIndex = 0;
+            VertexIndex < 3;
+            VertexIndex++)
+        {
+            triangle *Poly = Cube->Polys + PolysIndex;
+            
+            Poly->Vertex[VertexIndex] = Poly->Vertex[VertexIndex] + P;
+        }
+    }
+}
+
 void
 TransformIntoClipSpace(f32 FOV,f32 n,f32 f,f32 AspectRatio, 
                        v3 RawV0, v3 RawV1, v3 RawV2,
@@ -106,7 +282,7 @@ TransformIntoClipSpace(f32 FOV,f32 n,f32 f,f32 AspectRatio,
     f32 XScale = 1.0f / (TanHalfFov * AspectRatio);
     f32 YScale = 1.0f / TanHalfFov;
     f32 a = f/(f-n);
-    f32 b = -2*n*f / (f - n);
+    f32 b = (-2*n*f) / (f - n);
     
     ClipSpaceV0Out->x = RawV0.x * XScale;
     ClipSpaceV0Out->y = RawV0.y * YScale;
@@ -172,21 +348,6 @@ MoveTriangle(u32 TriangleIndex, f32 X,f32 Y,f32 Z)
     Triangle->Vertex[2] = Triangle->Vertex[2]+v3f(X,Y,Z);
 }
 
-
-internal void
-AddTriangle(v3 V0, v3 V1, v3 V2, v3 V0Color,v3 V1Color,v3 V2Color)
-{
-    assert(gTrianglesCount < MAX_TRIANGLES);
-    triangle *Triangle = &gTriangles[gTrianglesCount++];
-    
-    Triangle->Vertex[0] = V0;
-    Triangle->Vertex[1] = V1;
-    Triangle->Vertex[2] = V2;
-    Triangle->V0Color = V0Color;
-    Triangle->V1Color = V1Color;
-    Triangle->V2Color = V2Color;
-}
-
 f32
 Lerp(f32 A,f32 B, f32 Alpha)
 {
@@ -250,21 +411,17 @@ RotateAroundZ(f32 Angle, v3 P)
     return Result;
 }
 
-
-
 v3
 RotateZAroundPoint(f32 Angle, v3 P, v3 PToRotateAround)
 {
     return RotateAroundZ(Angle, P - PToRotateAround) + PToRotateAround;
 }
 
-
 v3
 RotateXAroundPoint(f32 Angle, v3 P, v3 PToRotateAround)
 {
     return RotateAroundX(Angle, P - PToRotateAround) + PToRotateAround;
 }
-
 
 v3
 RotateYAroundPoint(f32 Angle, v3 P, v3 PToRotateAround)
@@ -299,8 +456,8 @@ Barycentric(s32 X,s32 Y, v3 V0,v3 V1,v3 V2)
     f32 x1x3 = V0.x - V2.x;
     f32 y1y3 = V0.y - V2.y;
     f32 y3y1 = V2.y - V0.y;
-    f32 xx3  = X - V2.x;
-    f32 yy3  = Y - V2.y;
+    f32 xx3  = X - V2.x + 0.5f;
+    f32 yy3  = Y - V2.y + 0.5f;
     
     f32 Denominator = (y2y3*x1x3)+(x3x2*y1y3);
     Result.W0 = (y2y3*xx3+x3x2*yy3) / Denominator;
@@ -314,17 +471,17 @@ internal u32
 GetColorForPixel(barycentric_results BColor,v3 V0Color,v3 V1Color,v3 V2Color)
 {
     u32 Result = 0;
-    u32 ColorV0 = ((u32)(V0Color.r*BColor.W0) << 16) |
-        ((u32)(V0Color.g*BColor.W1) << 8) | 
-        ((u32)(V0Color.b*BColor.W2) << 0);
+    u32 ColorV0 = ((u32)((V0Color.r*255.0f)*BColor.W0) << 16) |
+        ((u32)((V0Color.g*255.0f)*BColor.W1) << 8) | 
+        ((u32)((V0Color.b*255.0f)*BColor.W2) << 0);
     
-    u32 ColorV1 = ((u32)(V1Color.r*BColor.W0) << 16) |
-        ((u32)(V1Color.g*BColor.W1) << 8) | 
-        ((u32)(V1Color.b*BColor.W2) << 0);
+    u32 ColorV1 = ((u32)((V1Color.r*255.0f)*BColor.W0) << 16) |
+        ((u32)((V1Color.g*255.0f)*BColor.W1) << 8) | 
+        ((u32)((V1Color.b*255.0f)*BColor.W2) << 0);
     
-    u32 ColorV2 = ((u32)(V2Color.r*BColor.W0) << 16) |
-        ((u32)(V2Color.g*BColor.W1) << 8) | 
-        ((u32)(V2Color.b*BColor.W2) << 0);
+    u32 ColorV2 = ((u32)((V2Color.r*255.0f)*BColor.W0) << 16) |
+        ((u32)((V2Color.g*255.0f)*BColor.W1) << 8) | 
+        ((u32)((V2Color.b*255.0f)*BColor.W2) << 0);
     
     
     Result = ColorV0+ColorV1+ColorV2;
@@ -371,7 +528,6 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vert
         {
             xStart = WINDOW_WIDTH;
         }
-        
         if(xEnd < 0)
         {
             xEnd = 0;
@@ -385,9 +541,16 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vert
             XIndex < xEnd;
             XIndex++)
         {
+            //f32 DepthValue = GetValueFromDepthBufferAt(XIndex,YIndex);
+            //f32 ComputedZ = Vertex1.z;
+            //if(ComputedZ < DepthValue)
+            //{
+            // TODO(shvayko): F Depth = (Z - Near) / (Far - Near);
+            //SetValueToDepthBufferAt(XIndex,YIndex, ComputedZ);
             barycentric_results BColor = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
             u32 Color = GetColorForPixel(BColor,V0Color,V1Color,V2Color);
             PlotPixel(Backbuffer, XIndex, YIndex, Color);
+            //}
         }
     }
     
@@ -540,7 +703,6 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
     }
 }
 
-global bool gIsInit = false;
 
 void
 GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
@@ -548,115 +710,57 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     if(!gIsInit)
     {
         gIsInit = true;
+        gCameraP = v3f(0.0f,0.0f,0.0f);
+        gCameraTarget = v3f(0.0f,0.0f,1.0f);
     }
     
     gTrianglesCount = 0; // NOTE(shvayko): Reset
-#if 0
+    gCubeModelsCount = 0;
+    memset(CubeModels,0,sizeof(cube_model)*1024);
+    
+    cube_model *Cube = CreateCube(v3f(1,0,6));
+    cube_model *CubeSecond = CreateCube(v3f(5.8f,0,7));
+    
+    for(u32 Y = 0;
+        Y < WINDOW_HEIGHT;
+        Y++)
+    {
+        for(u32 X = 0;
+            X < WINDOW_WIDTH;
+            X++)
+        {
+            gDepthBuffer[Y][X] = INFINITY;
+        }
+    }
+    
     // NOTE(shvayko): Test Cube 
-    v3 FrontFaceV0 = v3f(-10.0f, 10.0f, 20.0f);
-    v3 FrontFaceV1 = v3f( 10.0f, 10.0f, 20.0f);
-    v3 FrontFaceV2 = v3f(-10.0f, -10.0f,20.0f);
-    AddTriangle(FrontFaceV0,FrontFaceV1,FrontFaceV2, 0xFF00FF);
     
-    v3 FrontFaceV00 = v3f(10.0f, 10.0f, 20.0f);
-    v3 FrontFaceV01 = v3f(10.0f, -10.0f, 20.0f);
-    v3 FrontFaceV02 = v3f(-10.0f, -10.0f,20.0f);
-    AddTriangle(FrontFaceV00,FrontFaceV01,FrontFaceV02,0xFF00FF);
-    
-    
-    v3 RightFaceV0 = v3f(10.0f, -10.0f, 20.0f);
-    v3 RightFaceV1 = v3f(10.0f, 10.0f,  20.0f);
-    v3 RightFaceV2 = v3f(10.0f, -10.0f, 25.0f);
-    AddTriangle(RightFaceV0,RightFaceV1,RightFaceV2,0x00FF00);
-    
-    v3 RightFaceV00 = v3f(10.0f, 10.0f, 20.0f);
-    v3 RightFaceV01 = v3f(10.0f, 10.0f,  25.0f);
-    v3 RightFaceV02 = v3f(10.0f, -10.0f, 25.0f);
-    AddTriangle(RightFaceV00,RightFaceV01,RightFaceV02,0xFF0000);
-    
-    
-    v3 BackFaceV0 = v3f(10.0f, 10.0f,  25.0f);
-    v3 BackFaceV1 = v3f(10.0f, -10.0f, 25.0f);
-    v3 BackFaceV2 = v3f(-10.0f, 10.0f, 25.0f);
-    AddTriangle(BackFaceV0,BackFaceV1,BackFaceV2,0xFFFF00);
-    
-    v3 BackFaceV00 = v3f(10.0f, -10.0f, 25.0f);
-    v3 BackFaceV01 = v3f(-10.0f, -10.0f,  25.0f);
-    v3 BackFaceV02 = v3f(-10.0f, 10.0f, 25.0f);
-    AddTriangle(BackFaceV00,BackFaceV01,BackFaceV02,0xFF0000);
-    
-    v3 LeftFaceV0 = v3f(-10.0f, 10.0f, 20.0f);
-    v3 LeftFaceV1 = v3f(-10.0f, -10.0f,20.0f);
-    v3 LeftFaceV2 = v3f(-10.0f, 10.0f, 25.0f);
-    AddTriangle(LeftFaceV0,LeftFaceV1,LeftFaceV2,0xF0000F);
-    
-    v3 LeftFaceV00 = v3f(-10.0f, -10.0f, 20.0f);
-    v3 LeftFaceV01 = v3f(-10.0f, -10.0f,  25.0f);
-    v3 LeftFaceV02 = v3f(-10.0f, 10.0f, 25.0f);
-    AddTriangle(LeftFaceV00,LeftFaceV01,LeftFaceV02,0x00FFFF);
-    
-    v3 UpFaceV0 = v3f(-10.0f,  -10.0f,  20.0f);
-    v3 UpFaceV1 = v3f(-10.0f,  -10.0f,  25.0f);
-    v3 UpFaceV2 = v3f(10.0f,  -10.0f,   25.0f);
-    AddTriangle(UpFaceV0,UpFaceV1,UpFaceV2,0x00FF00);
-    
-    v3 UpFaceV00 = v3f(10.0f, -10.0f,  20.0f);
-    v3 UpFaceV01 = v3f(10.0f, -10.0f,  25.0f);
-    v3 UpFaceV02 = v3f(-10.0f, -10.0f, 20.0f);
-    AddTriangle(UpFaceV00,UpFaceV01,UpFaceV02,0x00FF00);
-    
-    
-    v3 BottomFaceV0 = v3f(-10.0f,  10.0f,  20.0f);
-    v3 BottomFaceV1 = v3f(-10.0f,  10.0f,  25.0f);
-    v3 BottomFaceV2 = v3f(10.0f,  10.0f,   25.0f);
-    AddTriangle(BottomFaceV0,BottomFaceV1,BottomFaceV2,0x00FF00);
-    
-    v3 BottomFaceV00 = v3f(10.0f, 10.0f,  20.0f);
-    v3 BottomFaceV01 = v3f(10.0f, 10.0f,  25.0f);
-    v3 BottomFaceV02 = v3f(-10.0f,10.0f, 20.0f);
-    AddTriangle(BottomFaceV00,BottomFaceV01,BottomFaceV02,0x00FF00);
-    
-#else
-    // NOTE(shvayko): Test triangle where 2 vertices beyond near clipping plane
-    v3 LeftFaceV00 = v3f(5.0f, -10.0f,  20.0f);
-    v3 LeftFaceV01 = v3f(10.0f, -10.0f, 20.0f);
-    v3 LeftFaceV02 = v3f(7.0f, 10.0f,   20.0f);
-    AddTriangle(LeftFaceV00,LeftFaceV01,LeftFaceV02,
-                v3f(0xFF,0,0),v3f(0,0xFF,0),v3f(0,0,0xFF));
-#endif
     ClearBackbuffer(Backbuffer);
-    
-    persist f32 dZ = 1.0f;
-    persist f32 dX = 1.0f;
+    persist v3 P = Cube->WorldP;
+    persist v3 P0 = CubeSecond->WorldP;
     if(IsButtonDown(ButtonUp))
     {
-        dZ += 0.01f;
+        P.z += 0.1f;
     }
     if(IsButtonDown(ButtonDown))
     {
-        dZ -= 0.01f;
+        P.z -= 0.1f;
     }
     if(IsButtonDown(ButtonLeft))
     {
-        dX -= 0.01f;
+        P.x -= 0.1f;
     }
     if(IsButtonDown(ButtonRight))
     {
-        dX += 0.01f;
+        P.x += 0.1f;
     }
     
-    MoveTriangle(0,dX,0,dZ);
-    MoveTriangle(1,dX,0,dZ);
-    MoveTriangle(2,dX,0,dZ);
-    MoveTriangle(3,dX,0,dZ);
-    MoveTriangle(4,dX,0,dZ);
-    MoveTriangle(5,dX,0,dZ);
-    MoveTriangle(6,dX,0,dZ);
-    MoveTriangle(7,dX,0,dZ);
-    MoveTriangle(8,dX,0,dZ);
-    MoveTriangle(9,dX,0,dZ);
-    MoveTriangle(10,dX,0,dZ);
-    MoveTriangle(11,dX,0,dZ);
+    
+    
+    TranslateCube(Cube,P);
+    TranslateCube(CubeSecond,P0);
+    
+    
 #if 0 
     static f32 Angle = 0.001f;
     Angle += 0.001f;
@@ -678,230 +782,242 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     f32 n = 1.0f; // NOTE: Near plane
     f32 f = 15.0f; // NOTE: Far plane
     f32 AspectRatio = (f32)WINDOW_WIDTH / (f32)WINDOW_HEIGHT;
-    for(u32 TriangleIndex = 0;
-        TriangleIndex < gTrianglesCount;
-        TriangleIndex++)
+    for(u32 ModelIndex  = 0;
+        ModelIndex < gCubeModelsCount;
+        ModelIndex++)
     {
-        triangle *Triangle = &gTriangles[TriangleIndex];
-        v3 V0 = Triangle->Vertex[0];
-        v3 V1 = Triangle->Vertex[1];
-        v3 V2 = Triangle->Vertex[2];
-        
-        // NOTE(shvayko): Transform to clip space
-        v4 ClipV0,ClipV1,ClipV2;
-        TransformIntoClipSpace(FOV,n,f,AspectRatio,V0,V1,V2,
-                               &ClipV0, &ClipV1, &ClipV2);
-        
-        // NOTE(shvayko): Clipping  -1 <= x/w <= 1 ==> -w <= x <= w
-        // NOTE(shvayko): Clipcode for every vertex
-        u32 ClipCode[3];
-        memset(ClipCode,0,4*3);
-        // NOTE(shvayko): Count how much vertices have Z > NearPlane
-        u32 VerticesInsideZRange = 0;
-        v4 TestVertices[3] = {ClipV0,ClipV1,ClipV2};
-        
-        for(u32 VertexIndex = 0;
-            VertexIndex < 3;
-            VertexIndex++)
+        cube_model *Model = CubeModels + ModelIndex;
+        for(u32 ModelPolysIndex = 0;
+            ModelPolysIndex < Model->PolysCount;
+            ModelPolysIndex++)
         {
-            v4 CurrentTestVertex = TestVertices[VertexIndex];
-            if(CurrentTestVertex.x >= CurrentTestVertex.w)
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_X_GREATER;
-            }
-            else if(CurrentTestVertex.x <= -CurrentTestVertex.w)
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_X_LOWER;
-            }
-            else
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_X_INSIDE;
-            }
+            triangle *Triangle = &Model->Polys[ModelPolysIndex];
+            v3 V0 = Triangle->Vertex[0];
+            v3 V1 = Triangle->Vertex[1];
+            v3 V2 = Triangle->Vertex[2];
             
-            if(CurrentTestVertex.y >= CurrentTestVertex.w)
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_Y_GREATER;
-            }
-            else if(CurrentTestVertex.y <= -CurrentTestVertex.w)
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_Y_LOWER;
-            }
-            else
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_Y_INSIDE;
-            }
+            //CameraTransform(&V0,&V1,&V2);
             
-            if(CurrentTestVertex.z >= CurrentTestVertex.w)
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_Z_GREATER;
-            }
-            else if(CurrentTestVertex.z <= -CurrentTestVertex.w)
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_Z_LOWER;
-            }
-            else
-            {
-                ClipCode[VertexIndex] |= CLIPCODE_Z_INSIDE;
-                VerticesInsideZRange++;
-            }
+            // NOTE(shvayko): Transform to clip space
+            v4 ClipV0,ClipV1,ClipV2;
+            TransformIntoClipSpace(FOV,n,f,AspectRatio,V0,V1,V2,
+                                   &ClipV0, &ClipV1, &ClipV2);
             
-        }
-        // NOTE(shvayko):Check if all 3 points outside canonical volume
-        if(IsTrivialReject(ClipCode,Clipping_CheckX) ||
-           IsTrivialReject(ClipCode,Clipping_CheckY) ||  
-           IsTrivialReject(ClipCode,Clipping_CheckZ))
-        {
-            // NOTE(shvayko): Go to the next polygon
-            continue;
-        }
-        
-        
-        // NOTE(shvayko):Check if any vertex lying beyond near plane
-        if(IsBitSet(ClipCode[0],7) ||
-           IsBitSet(ClipCode[1],7) ||
-           IsBitSet(ClipCode[2],7))
-        {
-            if(VerticesInsideZRange == 1)
+            // NOTE(shvayko): Clipping  -1 <= x/w <= 1 ==> -w <= x <= w
+            // NOTE(shvayko): Clipcode for every vertex
+            u32 ClipCode[3];
+            memset(ClipCode,0,4*3);
+            // NOTE(shvayko): Count how much vertices have Z > NearPlane
+            u32 VerticesInsideZRange = 0;
+            v4 TestVertices[3] = {ClipV0,ClipV1,ClipV2};
+            
+            for(u32 VertexIndex = 0;
+                VertexIndex < 3;
+                VertexIndex++)
             {
-                // NOTE(shvayko): The simplest case where only one interior vertex. 
-                // Just interpolate each exterior vertex with interior vertex and that 
-                // will produce new vertices which will  represent one new triangle.
-                
-                // NOTE(shvayko): TmpV0 - Interior vertex; TmpV1 - Exterior vertex; 
-                // TmpV2 - Exterior vertex
-                v3 TmpV0,TmpV1,TmpV2;
-                if(IsBitSet(ClipCode[0],8))
+                v4 CurrentTestVertex = TestVertices[VertexIndex];
+                if(CurrentTestVertex.x >= CurrentTestVertex.w)
                 {
-                    TmpV0 = V0;
-                    TmpV1 = V1;
-                    TmpV2 = V2;
+                    ClipCode[VertexIndex] |= CLIPCODE_X_GREATER;
                 }
-                else if(IsBitSet(ClipCode[1],8))
+                else if(CurrentTestVertex.x <= -CurrentTestVertex.w)
                 {
-                    TmpV0 = V1;
-                    TmpV1 = V0;
-                    TmpV2 = V2;
+                    ClipCode[VertexIndex] |= CLIPCODE_X_LOWER;
                 }
                 else
                 {
-                    TmpV0 = V2;
-                    TmpV1 = V0;
-                    TmpV2 = V1;
+                    ClipCode[VertexIndex] |= CLIPCODE_X_INSIDE;
                 }
                 
-                // NOTE(shvayko): Solve for t when z component is equal to near z
-                // Pi(x,y,z) = P0(x,y,z) + (P1(x,y,z) - P0(x,y,z))*t
+                if(CurrentTestVertex.y >= CurrentTestVertex.w)
+                {
+                    ClipCode[VertexIndex] |= CLIPCODE_Y_GREATER;
+                }
+                else if(CurrentTestVertex.y <= -CurrentTestVertex.w)
+                {
+                    ClipCode[VertexIndex] |= CLIPCODE_Y_LOWER;
+                }
+                else
+                {
+                    ClipCode[VertexIndex] |= CLIPCODE_Y_INSIDE;
+                }
                 
-                // NOTE(shvayko): 1.0f is near plane Z
-                
-                // NOTE(shvayko): TmpV0 and TmpV2
-                f32 t = (1.0f-TmpV1.z) / (TmpV0.z - TmpV1.z); 
-                
-                f32 x = TmpV1.x + (TmpV0.x - TmpV1.x)*t;
-                f32 y = TmpV1.y + (TmpV0.y - TmpV1.y)*t;
-                f32 z = TmpV1.z + (TmpV0.z - TmpV1.z)*t;
-                
-                TmpV1 = v3f(x,y,1.1f);
-                // NOTE(shvayko): TmpV0 and TmpV2
-                
-                f32 t1 = (1.0f - TmpV2.z) / (TmpV0.z - TmpV2.z); 
-                
-                x = TmpV2.x + (TmpV0.x - TmpV2.x)*t1;
-                y = TmpV2.y + (TmpV0.y - TmpV2.y)*t1;
-                z = TmpV2.z + (TmpV0.z - TmpV2.z)*t1;
-                
-                TmpV2 = v3f(x,y,1.1f);
-                
-                // NOTE(shvayko): New triangle
-                v3 NT0 = TmpV0;
-                v3 NT1 = TmpV1;
-                v3 NT2 = TmpV2;
-                
-                AddTriangle(NT0,NT1,NT2,Triangle->V0Color,Triangle->V1Color,
-                            Triangle->V2Color);
+                if(CurrentTestVertex.z >= CurrentTestVertex.w)
+                {
+                    ClipCode[VertexIndex] |= CLIPCODE_Z_GREATER;
+                }
+                else if(CurrentTestVertex.z <= -CurrentTestVertex.w)
+                {
+                    ClipCode[VertexIndex] |= CLIPCODE_Z_LOWER;
+                }
+                else
+                {
+                    ClipCode[VertexIndex] |= CLIPCODE_Z_INSIDE;
+                    VerticesInsideZRange++;
+                }
                 
             }
-            else if(VerticesInsideZRange == 2)
+            // NOTE(shvayko):Check if all 3 points outside canonical volume
+            if(IsTrivialReject(ClipCode,Clipping_CheckX) ||
+               IsTrivialReject(ClipCode,Clipping_CheckY) ||  
+               IsTrivialReject(ClipCode,Clipping_CheckZ))
             {
-                
-                // NOTE(shvayko): The  case where two interior vertex. 
-                // That case will produce 2 triangles
-                
-                // NOTE(shvayko): TmpV0 - Interior vertex; TmpV1 - Interior vertex; 
-                // TmpV2 - Exterior vertex
-                
-                v3 TmpV0,TmpV1,TmpV2;
-                if(IsBitSet(ClipCode[0],8))
+                // NOTE(shvayko): Go to the next polygon
+                continue;
+            }
+            
+            
+            // NOTE(shvayko):Check if any vertex lying beyond near plane
+            if(IsBitSet(ClipCode[0],7) ||
+               IsBitSet(ClipCode[1],7) ||
+               IsBitSet(ClipCode[2],7))
+            {
+                if(VerticesInsideZRange == 1)
                 {
-                    TmpV0 = V0;
-                    if(IsBitSet(ClipCode[1],8))
+                    // NOTE(shvayko): The simplest case where only one interior vertex. 
+                    // Just interpolate each exterior vertex with interior vertex and that 
+                    // will produce new vertices which will  represent one new triangle.
+                    
+                    // NOTE(shvayko): TmpV0 - Interior vertex; TmpV1 - Exterior vertex; 
+                    // TmpV2 - Exterior vertex
+                    v3 TmpV0,TmpV1,TmpV2;
+                    if(IsBitSet(ClipCode[0],8))
                     {
+                        TmpV0 = V0;
                         TmpV1 = V1;
+                        TmpV2 = V2;
+                    }
+                    else if(IsBitSet(ClipCode[1],8))
+                    {
+                        TmpV0 = V1;
+                        TmpV1 = V0;
                         TmpV2 = V2;
                     }
                     else
                     {
-                        TmpV1 = V2;
+                        TmpV0 = V2;
+                        TmpV1 = V0;
                         TmpV2 = V1;
                     }
-                } 
-                else if(IsBitSet(ClipCode[1],8))
-                {
-                    TmpV0 = V1;
-                    TmpV1 = V2;
-                    TmpV2 = V0;
+                    
+                    // NOTE(shvayko): Solve for t when z component is equal to near z
+                    // Pi(x,y,z) = P0(x,y,z) + (P1(x,y,z) - P0(x,y,z))*t
+                    
+                    // NOTE(shvayko): 1.0f is near plane Z
+                    
+                    // NOTE(shvayko): TmpV0 and TmpV2
+                    f32 t = (1.0f-TmpV1.z) / (TmpV0.z - TmpV1.z); 
+                    
+                    f32 x = TmpV1.x + (TmpV0.x - TmpV1.x)*t;
+                    f32 y = TmpV1.y + (TmpV0.y - TmpV1.y)*t;
+                    f32 z = TmpV1.z + (TmpV0.z - TmpV1.z)*t;
+                    
+                    TmpV1 = v3f(x,y,1.1f);
+                    // NOTE(shvayko): TmpV0 and TmpV2
+                    
+                    f32 t1 = (1.0f - TmpV2.z) / (TmpV0.z - TmpV2.z); 
+                    
+                    x = TmpV2.x + (TmpV0.x - TmpV2.x)*t1;
+                    y = TmpV2.y + (TmpV0.y - TmpV2.y)*t1;
+                    z = TmpV2.z + (TmpV0.z - TmpV2.z)*t1;
+                    
+                    TmpV2 = v3f(x,y,1.1f);
+                    
+                    // NOTE(shvayko): New triangle
+                    v3 NT0 = TmpV0;
+                    v3 NT1 = TmpV1;
+                    v3 NT2 = TmpV2;
+                    
+                    AddPolygonIntoModel(Model, NT0,NT1,NT2, Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
+                    //Triangle->V2Color);
+                    //AddTriangle(NT0,NT1,NT2,Triangle->V0Color,Triangle->V1Color,
+                    //Triangle->V2Color);
+                    
                 }
-                
-                // NOTE(shvayko): Solve for t when z component is equal to near z
-                
-                // NOTE(shvayko): first created new vertex
-                
-                // NOTE(shvayko): 1.0f is near plane Z
-                f32 t = (1.0f-TmpV2.z) / (TmpV0.z - TmpV2.z); 
-                
-                f32 X0i = TmpV2.x + (TmpV0.x - TmpV2.x)*t;
-                f32 Y0i = TmpV2.y + (TmpV0.y - TmpV2.y)*t;
-                f32 Z0i = TmpV2.z + (TmpV0.z - TmpV2.z)*t;
-                
-                // NOTE(shvayko): second created new vertex
-                
-                f32 t1 = (1.0f-TmpV2.z) / (TmpV1.z - TmpV2.z);
-                
-                f32 X1i = TmpV2.x + (TmpV1.x - TmpV2.x)*t1;
-                f32 Y1i = TmpV2.y + (TmpV1.y - TmpV2.y)*t1;
-                f32 Z1i = TmpV2.z + (TmpV1.z - TmpV2.z)*t1;
-                
-                // NOTE(shvayko): Split into 2 triangles
-                
-                AddTriangle(TmpV0,v3f(X1i,Y1i,1.1f),TmpV1,Triangle->V0Color,Triangle->V1Color,
-                            Triangle->V2Color);
-                AddTriangle(TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f),Triangle->V0Color,Triangle->V1Color,
-                            Triangle->V2Color);
+                else if(VerticesInsideZRange == 2)
+                {
+                    
+                    // NOTE(shvayko): The  case where two interior vertex. 
+                    // That case will produce 2 triangles
+                    
+                    // NOTE(shvayko): TmpV0 - Interior vertex; TmpV1 - Interior vertex; 
+                    // TmpV2 - Exterior vertex
+                    
+                    v3 TmpV0,TmpV1,TmpV2;
+                    if(IsBitSet(ClipCode[0],8))
+                    {
+                        TmpV0 = V0;
+                        if(IsBitSet(ClipCode[1],8))
+                        {
+                            TmpV1 = V1;
+                            TmpV2 = V2;
+                        }
+                        else
+                        {
+                            TmpV1 = V2;
+                            TmpV2 = V1;
+                        }
+                    } 
+                    else if(IsBitSet(ClipCode[1],8))
+                    {
+                        TmpV0 = V1;
+                        TmpV1 = V2;
+                        TmpV2 = V0;
+                    }
+                    
+                    // NOTE(shvayko): Solve for t when z component is equal to near z
+                    
+                    // NOTE(shvayko): first created new vertex
+                    
+                    // NOTE(shvayko): 1.0f is near plane Z
+                    f32 t = (1.0f-TmpV2.z) / (TmpV0.z - TmpV2.z); 
+                    
+                    f32 X0i = TmpV2.x + (TmpV0.x - TmpV2.x)*t;
+                    f32 Y0i = TmpV2.y + (TmpV0.y - TmpV2.y)*t;
+                    f32 Z0i = TmpV2.z + (TmpV0.z - TmpV2.z)*t;
+                    
+                    // NOTE(shvayko): second created new vertex
+                    
+                    f32 t1 = (1.0f-TmpV2.z) / (TmpV1.z - TmpV2.z);
+                    
+                    f32 X1i = TmpV2.x + (TmpV1.x - TmpV2.x)*t1;
+                    f32 Y1i = TmpV2.y + (TmpV1.y - TmpV2.y)*t1;
+                    f32 Z1i = TmpV2.z + (TmpV1.z - TmpV2.z)*t1;
+                    
+                    // NOTE(shvayko): Split into 2 triangles
+                    AddPolygonIntoModel(Model, TmpV0,v3f(X1i,Y1i,1.1f),TmpV1, Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
+                    AddPolygonIntoModel(Model, TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f), Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
+                    /*
+                    AddTriangle(TmpV0,v3f(X1i,Y1i,1.1f),TmpV1,Triangle->V0Color,Triangle->V1Color,
+                                Triangle->V2Color);
+                    AddTriangle(TmpV0,v3f(X0i,Y0i,1.1f),v3f(X1i,Y1i,1.1f),Triangle->V0Color,Triangle->V1Color,Triangle->V2Color);
+*/
+                }
+                else
+                {
+                    assert(!"lol");
+                }
             }
             else
             {
-                assert(!"lol");
+                // NOTE(shvayko): All vertices is in Z range. Process without any clipping
+                
+                // NOTE(shvayko): Pespective divide. (Transforming from Clip Space into NDC space)
+                
+                v3 NdcV0,NdcV1,NdcV2;
+                TransformHomogeneousToNDC(ClipV0,ClipV1,ClipV2,&NdcV0,&NdcV1,&NdcV2);
+                
+                // NOTE(shvayko):Viewport tranformation(Transforming from NDC space(-1.0f - 1.0f))
+                // to screen space(0 - Width, 0 - Height)
+                // NOTE(shvayko): Depth testing is done in screen space
+                v3 WinPV0,WinPV1,WinPV2;
+                Viewport(NdcV0,NdcV1,NdcV2,&WinPV0,&WinPV1,&WinPV2,ClipV0.z,ClipV1.z,ClipV2.z);
+                
+                // NOTE(shvayko): Rasterization Stage
+                DrawTriangle(Backbuffer,WinPV0,WinPV1,WinPV2,
+                             Triangle->V0Color,Triangle->V1Color,
+                             Triangle->V2Color);
             }
-        }
-        else
-        {
-            // NOTE(shvayko): All vertices is in Z range. Process without any clipping
-            
-            // NOTE(shvayko): Pespective divide. (Transforming from Clip Space into NDC space)
-            
-            v3 NdcV0,NdcV1,NdcV2;
-            TransformHomogeneousToNDC(ClipV0,ClipV1,ClipV2,&NdcV0,&NdcV1,&NdcV2);
-            
-            // NOTE(shvayko):Viewport tranformation(Transforming from NDC space(-1.0f - 1.0f))
-            // to screen space(0 - Width, 0 - Height)
-            
-            v3 WinPV0,WinPV1,WinPV2;
-            Viewport(NdcV0,NdcV1,NdcV2,&WinPV0,&WinPV1,&WinPV2,ClipV0.z,ClipV1.z,ClipV2.z);
-            
-            // NOTE(shvayko): Rasterization Stage
-            DrawTriangle(Backbuffer,WinPV0,WinPV1,WinPV2,
-                         Triangle->V0Color,Triangle->V1Color,
-                         Triangle->V2Color);
         }
     }
 }

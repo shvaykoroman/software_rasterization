@@ -82,3 +82,29 @@ Square(f32 X)
     f32 Result = X*X;
     return Result;
 }
+
+inline v3 
+Normalize(v3 A)
+{
+    v3 Result;
+    
+    f32 Length = sqrtf(A.x*A.x + A.y*A.y+ A.z*A.z);
+    
+    Result.x = A.x / Length;
+    Result.y = A.y / Length;
+    Result.z = A.z / Length;
+    
+    return Result;
+}
+
+inline v3 
+CrossProduct(v3 A, v3 B)
+{
+    v3 Result;
+    
+    Result.x = A.y*B.z - A.z * B.y;
+    Result.y = A.z*B.x - A.x * B.z;
+    Result.z = A.x*B.y - A.y * B.x;
+    
+    return Result;
+}
