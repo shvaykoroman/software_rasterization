@@ -1,7 +1,8 @@
 #include "math.cpp"
+#include "graphics.cpp"
+#include "texture.cpp"
 
 #define IsButtonDown(Button) (Input->Controller[0].Button.IsDown)
-#define BBP 4
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
@@ -55,6 +56,84 @@ struct triangle
     v3 V2Color;
 };
 
+#pragma pack(push,1)
+struct bitmap_format
+{
+    u16 FileType;
+    u32 FileSize;
+    u16 Reserved1;
+    u16 Reserved2;
+    u32 BitmapOffset;
+    
+    u32 Size;            /* Size of this header in bytes */
+    s32 Width;           /* Image width in pixels */
+    s32 Height;          /* Image height in pixels */
+	u16 Planes;          /* Number of color planes */
+	u16 BitsPerPixel;    /* Number of bits per pixel */
+	u32 Compression;     /* Compression methods used */
+	u32 SizeOfBitmap;    /* Size of bitmap in bytes */
+    s32 HorzResolution;  /* Horizontal resolution in pixels per meter */
+    s32 VertResolution;  /* Vertical resolution in pixels per meter */
+	u32 ColorsUsed;      /* Number of colors in the image */
+	u32 ColorsImportant; /* Minimum number of important colors */
+    
+    u32 DedMask;       /* Mask identifying bits of red component */
+    u32 GreenMask;     /* Mask identifying bits of green component */
+    u32 BlueMask;      /* Mask identifying bits of blue component */
+    u32 AlphaMask;     /* Mask identifying bits of alpha component */
+};
+#pragma pack(pop)
+
+inline void*
+OpenFile(char *Filename)
+{
+    void *Result = 0;
+    FILE *File = fopen(Filename,"rb");
+    u32 FileSize = 0;
+    if(File)
+    {
+        fseek(File,0,SEEK_END);
+        FileSize = ftell(File);
+        fseek(File,0,SEEK_SET);
+        
+        Result = malloc(FileSize);
+        fread(Result,FileSize,1,File);
+        fclose(File);
+    }
+    return Result;
+}
+
+inline texture 
+LoadTexture(char *Filename)
+{
+    texture Result;
+    
+    Result.Memory = OpenFile(Filename);
+    if(Result.Memory)
+    {
+        bitmap_format *Header = (bitmap_format*)Result.Memory;
+        
+        Result.Width  = Header->Width;
+        Result.Height = Header->Height;
+        Result.Stride = Header->Width * BBP;
+        
+        Result.Memory = (u32*)((u8*)Result.Memory + Header->BitmapOffset);
+        
+        u8 *Row = (u8*)Result.Memory;
+        for(u32 Y = 0; Y < Result.Height; Y++)
+        {
+            u32 *Pixel = (u32*)Row;
+            for(u32 X = 0; X < Result.Width; X++)
+            {
+                
+            }
+            Row += Result.Stride;
+        }
+        
+    }
+    
+    return Result;
+}
 
 global u32 gTrianglesCount;
 global triangle gTriangles[MAX_TRIANGLES];
@@ -513,43 +592,6 @@ RotateCube(cube_model *Cube,f32 Angle)
     }
 }
 
-void
-PlotPixel(game_backbuffer *Backbuffer, u32 X, u32 Y, u32 Color)
-{
-    
-    u32 *Pixel = (u32*)((u8*)(Backbuffer->Memory) + X * BBP + Y * Backbuffer->Stride); 
-    *Pixel = Color;
-    
-}
-
-struct barycentric_results
-{
-    f32 W0;
-    f32 W1;
-    f32 W2;
-};
-
-internal barycentric_results
-Barycentric(s32 X,s32 Y, v3 V0,v3 V1,v3 V2)
-{
-    barycentric_results Result = {0};
-    
-    f32 y2y3 = V1.y - V2.y;
-    f32 x3x2 = V2.x - V1.x;
-    f32 x1x3 = V0.x - V2.x;
-    f32 y1y3 = V0.y - V2.y;
-    f32 y3y1 = V2.y - V0.y;
-    f32 xx3  = X - V2.x + 0.5f;
-    f32 yy3  = Y - V2.y + 0.5f;
-    
-    f32 Denominator = (y2y3*x1x3)+(x3x2*y1y3);
-    Result.W0 = (y2y3*xx3+x3x2*yy3) / Denominator;
-    Result.W1 = (y3y1*xx3+x1x3*yy3) / Denominator;
-    Result.W2 = (1.0f - Result.W0 - Result.W1);
-    
-    return Result;
-}
-
 internal u32
 GetColorForPixel(barycentric_results BColor,v3 V0Color,v3 V1Color,v3 V2Color)
 {
@@ -628,7 +670,7 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vert
             
             barycentric_results BarycentricWeights = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
             f32 InterpolatedZ = InterpolateDepth(DepthV0,DepthV1,DepthV2,BarycentricWeights.W0,BarycentricWeights.W1,BarycentricWeights.W2);
-            if(InterpolatedZ <= DepthValue)
+            if(InterpolatedZ < DepthValue)
             {
                 SetValueToDepthBufferAt(XIndex,YIndex, InterpolatedZ);
                 
@@ -700,7 +742,7 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0,v3 Vertex1,v3 Vert
             
             f32 InterpolatedZ = InterpolateDepth(DepthV0,DepthV1,DepthV2,BarycentricWeights.W0,BarycentricWeights.W1,BarycentricWeights.W2);
             
-            if(InterpolatedZ <= DepthValue)
+            if(InterpolatedZ < DepthValue)
             {
                 SetValueToDepthBufferAt(XIndex,YIndex, InterpolatedZ);
                 u32 Color = GetColorForPixel(BarycentricWeights,V0Color,V1Color,V2Color);
@@ -712,7 +754,7 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0,v3 Vertex1,v3 Vert
     
 }
 
-void
+internal void
 DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2, 
              v3 V0Color,v3 V1Color, v3 V2Color, f32 ZDepthV0, f32 ZDepthV1, f32 ZDepthV2)
 {
@@ -739,8 +781,6 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
         Vertex0 = Vertex1;
         Vertex1 = Temp;
     }
-    
-    // NOTE(shvayko): Color interpolation
     
     if(Vertex0.y == Vertex1.y) // NOTE(shvayko): Flat top triangle
     {
@@ -773,16 +813,12 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
         // NOTE(shvayko):General triangle will split up into 2 triangles: Flat bottom and flat top.
         
         f32 Alpha  = (Vertex1.y - Vertex0.y) / (Vertex2.y - Vertex0.y);
-        //f32 V = (1.0f - Alpha)*Vertex0.x + Vertex2.x*Alpha;
         
-        // TODO(shvayko):Replace that with Lerp function!
-        f32 VX = Vertex0.x + (Vertex2.x - Vertex0.x)*Alpha;
-        f32 VY = Vertex0.y + (Vertex2.y - Vertex0.y)*Alpha;
-        
-        v3 Vertex = v3f(VX,VY,0.0f); 
+        // NOTE(shvaykop): Find new vertex through interpolating
+        v3 Vertex = LerpV3(Vertex0,Vertex2,Alpha);
         // NOTE(shvayko): Decide what major the triangle is
         
-        if(VX < Vertex1.x) // NOTE(shvayko): Left major
+        if(Vertex.x < Vertex1.x) // NOTE(shvayko): Left major
         {
             DrawFlatBottomTriangle(Backbuffer,Vertex0, Vertex1, Vertex, V0Color,V1Color, V2Color,ZDepthV0, ZDepthV1,ZDepthV2);
             
@@ -797,6 +833,8 @@ DrawTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vertex2,
     }
 }
 
+global texture Texture;
+
 void
 GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
 {
@@ -805,6 +843,10 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
         gIsInit = true;
         gCameraP = v3f(0.0f,0.0f,0.0f);
         gCameraTarget = v3f(0.0f,0.0f,1.0f);
+        
+        Texture = LoadTexture("../test.bmp");
+        
+        s32 FooBar = 5;
     }
     
     gTrianglesCount = 0; // NOTE(shvayko): Reset
@@ -815,10 +857,26 @@ GameUpdateAndRender(game_backbuffer *Backbuffer, controller *Input)
     cube_model *CubeSecond = CreateCube(v3f(5.8f,0,7));
     
     ClearDepthBuffer(1.0f);
+    ClearBackbuffer(Backbuffer);
+    
+    textured_vertex TV0 = {v3f(200.0f,  200.0f, 1.0f), v2f(0.0f,0.0f)};
+    textured_vertex TV1 = {v3f(200.0f,  50.0f,  1.0f), v2f(0.0f,1.0f)};
+    textured_vertex TV2 = {v3f(250.0f,  50.0f,  1.0f), v2f(1.0f,1.0f)};
+    v3 TVC0 = v3f(1.0f,0,0);
+    v3 TVC1 = v3f(1.0f,0,0);
+    v3 TVC2 = v3f(1.0f,0,0);
+    
+    textured_vertex TV10 = {v3f(250.0f,  200.0f,  1.0f), v2f(1.0f,0.0f)};
+    textured_vertex TV20 = {v3f(250.0f,  50.0f,  1.0f), v2f(1.0f,1.0f)};
+    textured_vertex TV00 = {v3f(200.0f,  200.0f, 1.0f), v2f(0.0f,0.0f)};
+    
+    DrawTriangleTextured(Backbuffer,TV0, TV1, TV2, TVC0, TVC1, TVC2, 0,0,0, Texture);
+    DrawTriangleTextured(Backbuffer,TV00, TV10, TV20, TVC0, TVC1, TVC2, 0,0,0, Texture);
+    
     
     // NOTE(shvayko): Test Cube 
     
-    ClearBackbuffer(Backbuffer);
+    
     
     persist v3 P = Cube->WorldP;
     persist v3 P0 = CubeSecond->WorldP;

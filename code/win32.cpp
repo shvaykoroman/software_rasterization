@@ -3,11 +3,6 @@
 #include <stdio.h>
 #include <stdint.h>
 
-/*Well, if you’re using the convention that one unit in local coordinates is 1 meter, and you
-want to have a universe that’s 100×100×100 km (a good size for a tank or racing sim), that
-means that your game grid has the following dimensions, given that there are 1,000
-meters in a kilometer:*/
-
 #include "game.h"
 #include <math.h>
 #include "game.cpp"

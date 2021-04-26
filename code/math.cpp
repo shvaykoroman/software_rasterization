@@ -76,6 +76,19 @@ operator*(f32 A, v3 B)
     return Result;
 }
 
+
+inline v2
+operator*(f32 A, v2 B)
+{
+    v2 Result;
+    
+    Result.x = A * B.x;
+    Result.y = A * B.y;
+    
+    return Result;
+}
+
+
 inline f32
 Square(f32 X)
 {
@@ -115,6 +128,27 @@ DotProduct(v3 A, v3 B)
     f32 Result = 0;
     
     Result = A.x*B.x+A.y*B.y+A.z*B.z;
+    
+    return Result;
+}
+
+inline v2
+LerpV2(v2 Source0,v2 Source1,f32 Alpha)
+{
+    v2 Result;
+    
+    Result = (1.0f - Alpha)*Source0 + Alpha*Source1;
+    
+    return Result;
+}
+
+
+inline v3
+LerpV3(v3 Source0,v3 Source1,f32 Alpha)
+{
+    v3 Result;
+    
+    Result = (1.0f - Alpha)*Source0 + Alpha*Source1;
     
     return Result;
 }
