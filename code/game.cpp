@@ -378,22 +378,22 @@ CreateCube(v3 InitWorldP)
     v3 UpFaceV0 = v3f(-1.0f,  -1.0f,  1.0f);
     v3 UpFaceV1 = v3f(-1.0f,  -1.0f,  2.0f);
     v3 UpFaceV2 = v3f(1.0f,  -1.0f,   2.0f);
-    AddPolygonIntoModel(Result,UpFaceV0,UpFaceV1,UpFaceV2,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,0.0f));
+    AddPolygonIntoModel(Result,UpFaceV0,UpFaceV1,UpFaceV2,v3f(0.0f,1,0),v3f(1,1.0f,0),v3f(0,1.0f,0.0f));
     
     v3 UpFaceV00 = v3f(1.0f, -1.0f,  1.0f);
     v3 UpFaceV01 = v3f(1.0f, -1.0f,  2.0f);
     v3 UpFaceV02 = v3f(-1.0f, -1.0f, 1.0f);
-    AddPolygonIntoModel(Result,UpFaceV00,UpFaceV01,UpFaceV02,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,0.0f));
+    AddPolygonIntoModel(Result,UpFaceV00,UpFaceV01,UpFaceV02,v3f(0.0f,0,1),v3f(0,1.0f,0),v3f(1,0,0.0f));
     
     v3 BottomFaceV0 = v3f(-1.0f,  1.0f,  1.0f);
     v3 BottomFaceV1 = v3f(-1.0f,  1.0f,  2.0f);
     v3 BottomFaceV2 = v3f(1.0f,  1.0f,   2.0f);
-    AddPolygonIntoModel(Result,BottomFaceV0,BottomFaceV1,BottomFaceV2,v3f(0.0f,0,0),v3f(0,1.0f,0),v3f(0,0,0.0f));
+    AddPolygonIntoModel(Result,BottomFaceV0,BottomFaceV1,BottomFaceV2,v3f(0.0f,1,0),v3f(0,1.0f,0),v3f(1,0,0.0f));
     
     v3 BottomFaceV00 = v3f(1.0f, 1.0f,  1.0f);
     v3 BottomFaceV01 = v3f(1.0f, 1.0f,  2.0f);
     v3 BottomFaceV02 = v3f(-1.0f,1.0f,  1.0f);
-    AddPolygonIntoModel(Result,BottomFaceV00,BottomFaceV01,BottomFaceV02,v3f(0,0,0),v3f(0,1,0),v3f(0,0,0));
+    AddPolygonIntoModel(Result,BottomFaceV00,BottomFaceV01,BottomFaceV02,v3f(1,1,0),v3f(0,1,0),v3f(0,1,1));
     
     return Result;
 }
@@ -596,6 +596,7 @@ internal u32
 GetColorForPixel(barycentric_results BColor,v3 V0Color,v3 V1Color,v3 V2Color)
 {
     u32 Result = 0;
+#if 0
     u32 ColorV0 = ((u32)((V0Color.r*255.0f)*BColor.W0) << 16) |
         ((u32)((V0Color.g*255.0f)*BColor.W1) << 8) | 
         ((u32)((V0Color.b*255.0f)*BColor.W2) << 0);
@@ -607,9 +608,24 @@ GetColorForPixel(barycentric_results BColor,v3 V0Color,v3 V1Color,v3 V2Color)
     u32 ColorV2 = ((u32)((V2Color.r*255.0f)*BColor.W0) << 16) |
         ((u32)((V2Color.g*255.0f)*BColor.W1) << 8) | 
         ((u32)((V2Color.b*255.0f)*BColor.W2) << 0);
+#endif
+    
+    u32 R = ((u32)((V0Color.r*255.0f)*BColor.W0)) + 
+        ((u32)((V1Color.r*255.0f)*BColor.W1)) + 
+        ((u32)((V2Color.r*255.0f)*BColor.W2));
     
     
-    Result = ColorV0+ColorV1+ColorV2;
+    u32 G = ((u32)((V0Color.g*255.0f)*BColor.W0)) + 
+        ((u32)((V1Color.g*255.0f)*BColor.W1)) + 
+        ((u32)((V2Color.g*255.0f)*BColor.W2));
+    
+    
+    u32 B = ((u32)((V0Color.b*255.0f)*BColor.W0)) + 
+        ((u32)((V1Color.b*255.0f)*BColor.W1)) + 
+        ((u32)((V2Color.b*255.0f)*BColor.W2));
+    
+    
+    Result = (R << 16) | (G << 8) | (B << 0);
     return Result;
 }
 
@@ -669,6 +685,7 @@ DrawFlatTopTriangle(game_backbuffer *Backbuffer, v3 Vertex0, v3 Vertex1, v3 Vert
             f32 DepthValue = GetValueFromDepthBufferAt(XIndex,YIndex);
             
             barycentric_results BarycentricWeights = Barycentric(XIndex,YIndex, Vertex0, Vertex1, Vertex2);
+            
             f32 InterpolatedZ = InterpolateDepth(DepthV0,DepthV1,DepthV2,BarycentricWeights.W0,BarycentricWeights.W1,BarycentricWeights.W2);
             if(InterpolatedZ < DepthValue)
             {
@@ -745,6 +762,7 @@ DrawFlatBottomTriangle(game_backbuffer *Backbuffer,v3 Vertex0,v3 Vertex1,v3 Vert
             if(InterpolatedZ < DepthValue)
             {
                 SetValueToDepthBufferAt(XIndex,YIndex, InterpolatedZ);
+                
                 u32 Color = GetColorForPixel(BarycentricWeights,V0Color,V1Color,V2Color);
                 
                 PlotPixel(Backbuffer, XIndex, YIndex, Color);
